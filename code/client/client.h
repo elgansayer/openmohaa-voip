@@ -38,6 +38,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #ifdef USE_VOIP
 #include <opus.h>
+#ifdef __cplusplus
+#include "VoiceCodec.h"
+#endif
 #endif
 
 // file full of random crap that gets used to create cl_guid
@@ -252,20 +255,22 @@ typedef struct {
 	qboolean voipCodecInitialized;
 
 	// incoming data...
-	// !!! FIXME: convert from parallel arrays to array of a struct.
-	OpusDecoder *opusDecoder[MAX_CLIENTS];
 	byte voipIncomingGeneration[MAX_CLIENTS];
 	int voipIncomingSequence[MAX_CLIENTS];
 	float voipGain[MAX_CLIENTS];
 	qboolean voipIgnore[MAX_CLIENTS];
+	int voipLastPacketTime[MAX_CLIENTS]; // For HUD display
 	qboolean voipMuteAll;
+
+#ifdef __cplusplus
+	VoiceCodec *voiceCodec;
+#endif
 
 	// outgoing data...
 	// if voipTargets[i / 8] & (1 << (i % 8)),
 	// then we are sending to clientnum i.
 	uint8_t voipTargets[(MAX_CLIENTS + 7) / 8];
 	uint8_t voipFlags;
-	OpusEncoder *opusEncoder;
 	int voipOutgoingDataSize;
 	int voipOutgoingDataFrames;
 	int voipOutgoingSequence;
@@ -283,6 +288,11 @@ typedef struct {
 } clientConnection_t;
 
 extern	clientConnection_t clc;
+
+#ifdef USE_VOIP
+extern cvar_t *cl_voip;
+extern cvar_t *voip_bitrate;
+#endif
 
 /*
 ==================================================================
@@ -551,6 +561,7 @@ const char *CL_ConfigString( int index );
 void CL_StartDemoLoop( void );
 void CL_NextDemo( void );
 void CL_ReadDemoMessage( void );
+void CL_WriteDemoMessage( msg_t *msg, int headerBytes );
 void CL_StopRecord_f(void);
 
 void CL_InitDownloads(void);

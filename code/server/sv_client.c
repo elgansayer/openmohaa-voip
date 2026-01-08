@@ -133,7 +133,6 @@ void SV_AuthorizeIpPacket( netadr_t from ) {
 	challenge_t *challengeptr;
 
 	if ( !NET_CompareBaseAdr( from, svs.authorizeAddress ) ) {
-		Com_Printf( "SV_AuthorizeIpPacket: not from authorize server\n" );
 		return;
 	}
 
@@ -1017,8 +1016,6 @@ static void SV_NextDownload_f( client_t *cl )
 	int block = atoi( Cmd_Argv(1) );
 
 	if (block == cl->downloadClientBlock) {
-		Com_DPrintf( "clientDownload: %d : client acknowledge of block %d\n", (int) (cl - svs.clients), block );
-
 		// Find out if we are done.  A zero-length block indicates EOF
 		if (cl->downloadBlockSize[cl->downloadClientBlock % MAX_DOWNLOAD_WINDOW] == 0) {
 			Com_Printf( "clientDownload: %d : file \"%s\" completed\n", (int) (cl - svs.clients), cl->downloadName );
@@ -1608,14 +1605,11 @@ void SV_UserinfoChanged( client_t *cl ) {
 	}
 	
 #ifdef USE_VOIP
-#ifdef LEGACY_PROTOCOL
-	if(cl->compat)
-		cl->hasVoip = qfalse;
-	else
-#endif
+	// Compatibility mode shouldn't block VoIP if the client explicitly supports it (sends cl_voipProtocol)
 	{
 		val = Info_ValueForKey(cl->userinfo, "cl_voipProtocol");
 		cl->hasVoip = !Q_stricmp( val, "opus" );
+		// Com_Printf("SV_UserinfoChanged: Client %d voip proto='%s' hasVoip=%d\n", cl - svs.clients, val, cl->hasVoip);
 	}
 #endif
 	
@@ -2032,26 +2026,34 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 
 	// decide who needs this VoIP packet sent to them...
 	for (i = 0, client = svs.clients; i < sv_maxclients->integer ; i++, client++) {
-		if (client->state != CS_ACTIVE)
-			continue;  // not in the game yet, don't send to this guy.
-		else if (i == sender)
-			continue;  // don't send voice packet back to original author.
-		else if (!client->hasVoip)
-			continue;  // no VoIP support, or unsupported protocol
-		else if (client->muteAllVoip)
-			continue;  // client is ignoring everyone.
-		else if (client->ignoreVoipFromClient[sender])
-			continue;  // client is ignoring this talker.
-		else if (*cl->downloadName)   // !!! FIXME: possible to DoS?
-			continue;  // no VoIP allowed if downloading, to save bandwidth.
+		
+		if (client->state != CS_ACTIVE) {
+			continue;
+		}
+		else if (i == sender) {
+			continue;
+		}
+		else if (!client->hasVoip) {
+			continue;
+		}
+		else if (client->muteAllVoip) {
+			continue;
+		}
+		else if (client->ignoreVoipFromClient[sender]) {
+			continue;
+		}
+		else if (*cl->downloadName) {
+			continue;
+		}
 
 		if(Com_IsVoipTarget(recips, sizeof(recips), i))
 			flags |= VOIP_DIRECT;
 		else
 			flags &= ~VOIP_DIRECT;
 
-		if (!(flags & (VOIP_SPATIAL | VOIP_DIRECT)))
-			continue;  // not addressed to this player.
+		if (!(flags & (VOIP_SPATIAL | VOIP_DIRECT))) {
+			continue;
+		}
 
 		// Transmit this packet to the client.
 		if (client->queuedVoipPackets >= ARRAY_LEN(client->voipPacket)) {
@@ -2070,6 +2072,9 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 
 		client->voipPacket[(client->queuedVoipIndex + client->queuedVoipPackets) % ARRAY_LEN(client->voipPacket)] = packet;
 		client->queuedVoipPackets++;
+		
+		Com_Printf("SV_VoIP: Queued packet for client %d (flags=%d, queue depth=%d)\n", 
+			i, flags, client->queuedVoipPackets);
 	}
 }
 #endif

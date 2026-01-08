@@ -42,6 +42,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/cl_uisoundpicker.cpp
     ${SOURCE_DIR}/client/cl_uistd.cpp
     ${SOURCE_DIR}/client/cl_uiview3d.cpp
+    ${SOURCE_DIR}/client/VoiceCodec.cpp
     ${SOURCE_DIR}/client/libmumblelink.c
     ${SOURCE_DIR}/client/qal.c
     ${SOURCE_DIR}/client/snd_codec_mp3.c
@@ -57,6 +58,7 @@ set(CLIENT_SOURCES
     ${SOURCE_DIR}/client/usignal.cpp
     ${SOURCE_DIR}/sdl/sdl_input.c
     ${SOURCE_DIR}/sdl/sdl_mouse.c
+    ${SOURCE_DIR}/sdl/sdl_snd.c
     ${CLIENT_PLATFORM_SOURCES}
 )
 

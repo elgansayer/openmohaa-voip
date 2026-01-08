@@ -232,6 +232,9 @@ extern "C" {
     const char  *S_OPENAL_GetMusicFilename();
     int          S_OPENAL_GetMusicLoopCount();
     unsigned int S_OPENAL_GetMusicOffset();
+    
+    // Added in OPM
+    void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
 
 #ifdef __cplusplus
 }

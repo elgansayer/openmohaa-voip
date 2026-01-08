@@ -265,12 +265,14 @@ void IN_StrafeUp(void) {IN_KeyUp(&in_strafe);}
 #ifdef USE_VOIP
 void IN_VoipRecordDown(void)
 {
+	Com_Printf("VoIP: Record Key Down\n");
 	IN_KeyDown(&in_voiprecord);
 	Cvar_Set("cl_voipSend", "1");
 }
 
 void IN_VoipRecordUp(void)
 {
+	Com_Printf("VoIP: Record Key Up\n");
 	IN_KeyUp(&in_voiprecord);
 	Cvar_Set("cl_voipSend", "0");
 }
@@ -988,8 +990,12 @@ void CL_WritePacket( void ) {
 #ifdef USE_VOIP
 	if (clc.voipOutgoingDataSize > 0)
 	{
+		Com_Printf("VoIP CLIENT: Attempting to send packet (size=%d, flags=%d, spatial=%d)\n",
+			clc.voipOutgoingDataSize, clc.voipFlags, !!(clc.voipFlags & VOIP_SPATIAL));
+			
 		if((clc.voipFlags & VOIP_SPATIAL) || Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1))
 		{
+			Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes)\n", clc.voipOutgoingDataSize);
 			MSG_WriteByte (&buf, clc_voipOpus);
 			MSG_WriteByte (&buf, clc.voipOutgoingGeneration);
 			MSG_WriteLong (&buf, clc.voipOutgoingSequence);
@@ -1170,6 +1176,10 @@ void CL_InitInput( void ) {
 	Cmd_AddCommand("-leanright", IN_LeanRightUp);
 	Cmd_AddCommand("+speed", IN_SpeedDown);
 	Cmd_AddCommand("-speed", IN_SpeedUp);
+#ifdef USE_VOIP
+	Cmd_AddCommand("+voiprecord", IN_VoipRecordDown);
+	Cmd_AddCommand("-voiprecord", IN_VoipRecordUp);
+#endif
 	Cmd_AddCommand("+button0", IN_Button0Down);
 	Cmd_AddCommand("-button0", IN_Button0Up);
 	Cmd_AddCommand("+button1", IN_Button1Down);

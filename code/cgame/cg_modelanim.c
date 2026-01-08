@@ -303,7 +303,7 @@ void CG_InterpolateAnimParms(entityState_t *state, entityState_t *sNext, refEnti
             curanim = cgi.Cvar_Get("viewmodelanimslot", "1", 0);
         }
 
-        cgi.Cvar_Set("viewmodelanimclienttime", va("%0.2f", model->frameInfo[curanim->integer].time));
+        // cgi.Cvar_Set("viewmodelanimclienttime", va("%0.2f", model->frameInfo[curanim->integer].time));
     }
 }
 

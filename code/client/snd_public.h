@@ -179,6 +179,7 @@ int S_AvailableCaptureSamples( void );
 void S_Capture( int samples, byte *data );
 void S_StopCapture( void );
 void S_MasterGain( float gain );
+void S_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
 #endif
 
 #ifdef __cplusplus

@@ -26,7 +26,7 @@ option(USE_HTTP "HTTP download support" ON)
 option(USE_CODEC_VORBIS "Ogg Vorbis support" ON)
 option(USE_CODEC_OPUS "Ogg Opus support" ON)
 option(USE_CODEC_MAD "MP3 support" ON)
-option(USE_VOIP "Voice chat" OFF)
+option(USE_VOIP "Voice chat" ON)
 option(USE_MUMBLE "Mumble support" OFF)
 option(USE_FREETYPE "Freetype font rendering" OFF)
 

@@ -1,0 +1,167 @@
+menu "voipsettings" 420 400 from_top 0.3
+
+resource Label {
+    name "voip_title"
+    rect 10 10 400 24
+    fgcolor 1 1 1 1
+    font "verdana-14"
+    title "VoIP Settings"
+}
+
+resource Label {
+    name "device_label"
+    rect 10 45 100 18
+    fgcolor 1 0.8 0.2 1
+    font "verdana-12"
+    title "Capture Device:"
+}
+
+resource Label {
+    name "device_name"
+    rect 120 45 280 18
+    fgcolor 0.7 0.9 1.0 1
+    font "verdana-12"
+    linkcvar "s_captureDeviceName"
+}
+
+// Microphone Level Meter
+resource Label {
+    name "mic_level_label"
+    rect 10 75 100 18
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Input Level:"
+}
+
+resource Label {
+    name "mic_level_bg"
+    rect 120 78 250 12
+    fgcolor 1 1 1 1
+    bgcolor 0.2 0.2 0.2 0.5
+    borderstyle "NONE"
+    shader textures/hud/healthback
+}
+
+resource Label {
+    name "mic_level_meter"
+    rect 120 78 250 12
+    fgcolor 1 1 1 1
+    bgcolor 0 0 0 0
+    borderstyle "NONE"
+    linkcvar "s_voipLevel"
+    statbar horizontal 0 1
+    statbar_shader textures/hud/healthmeter
+    statbar_shader_flash textures/hud/healthmeterflash
+}
+
+resource Label {
+    name "voip_enabled_label"
+    rect 10 110 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "VoIP Enabled:"
+}
+
+resource CheckBox {
+    name "voip_enabled_checkbox"
+    rect 200 110 150 20
+    linkcvar "cl_voip"
+    font "verdana-12"
+}
+
+resource Label {
+    name "voip_echo_label"
+    rect 10 140 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Echo Test (Self):"
+}
+
+resource CheckBox {
+    name "voip_echo_checkbox"
+    rect 200 140 150 20
+    linkcvar "cl_voipEcho"
+    font "verdana-12"
+}
+
+resource Label {
+    name "voip_muteall_label"
+    rect 10 170 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Mute All Players:"
+}
+
+resource Button {
+    name "voip_muteall_button"
+    rect 200 170 150 24
+    font "verdana-12"
+    title "Toggle Mute All"
+    stuffcommand "cl_voipMuteAll"
+}
+
+resource Label {
+    name "voip_ptt_label"
+    rect 10 205 180 20
+    fgcolor 0.8 0.8 0.8 1
+    font "verdana-12"
+    title "Push-to-Talk:"
+}
+
+resource Label {
+    name "voip_ptt_hint"
+    rect 200 205 200 20
+    fgcolor 0.6 0.8 1.0 1
+    font "verdana-12"
+    title "bind KEY +voiprecord"
+}
+
+resource Label {
+    name "commands_title"
+    rect 10 240 400 20
+    fgcolor 1 0.8 0.2 1
+    font "verdana-12"
+    title "Console Commands:"
+}
+
+resource Label {
+    name "cmd1"
+    rect 10 265 400 16
+    fgcolor 0.7 0.7 0.7 1
+    font "verdana-12"
+    title "cl_voipMute <num> - Mute client"
+}
+
+resource Label {
+    name "cmd2"
+    rect 10 283 400 16
+    fgcolor 0.7 0.7 0.7 1
+    font "verdana-12"
+    title "cl_voipUnmute <num> - Unmute"
+}
+
+resource Label {
+    name "cmd3"
+    rect 10 301 400 16
+    fgcolor 0.7 0.7 0.7 1
+    font "verdana-12"
+    title "cl_voipGain <num> <0-10> - Volume"
+}
+
+resource Label {
+    name "cmd4"
+    rect 10 319 400 16
+    fgcolor 0.7 0.7 0.7 1
+    font "verdana-12"
+    title "cl_voipListMuted - Show muted"
+}
+
+resource Button {
+    name "close_button"
+    rect 160 355 100 30
+    font "verdana-12"
+    title "Close"
+    stuffcommand "popmenu"
+}
+
+end.

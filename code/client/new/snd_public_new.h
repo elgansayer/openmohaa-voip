@@ -38,6 +38,8 @@ void S_Init2();
 
 #endif
 
+void S_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum);
+
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -437,6 +437,10 @@ enum clc_ops_e {
 	clc_voipOpus,    //
 };
 
+#define VOIP_DIRECT		1
+#define VOIP_SPATIAL	2
+#define VOIP_FLAGCNT    2
+
 /*
 ==============================================================
 

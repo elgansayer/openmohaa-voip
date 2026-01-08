@@ -37,6 +37,7 @@ extern "C" {
 }
 
 #include "../gamespy/gcdkey/gcdkeyc.h"
+#include "snd_local.h"
 
 #include <climits>
 
@@ -131,6 +132,10 @@ cvar_t	*cl_rate;
 
 clientActive_t		cl;
 clientConnection_t	clc;
+#ifdef USE_VOIP
+cvar_t *cl_voip = NULL;
+cvar_t *voip_bitrate = NULL;
+#endif
 clientStatic_t		cls;
 clientGameExport_t	*cge;
 //vm_t				*cgvm;
@@ -1006,6 +1011,16 @@ void CL_Disconnect() {
 	cl.mousex = mouseX;
 	cl.mousey = mouseY;
 
+
+#ifdef USE_VOIP
+#ifdef __cplusplus
+	if (clc.voiceCodec) {
+		delete clc.voiceCodec;
+		clc.voiceCodec = NULL;
+	}
+#endif
+#endif
+
 	// wipe the client connection
 	Com_Memset( &clc, 0, sizeof( clientConnection_t ) );
 
@@ -1260,6 +1275,112 @@ void CL_Setenv_f( void ) {
 CL_Disconnect_f
 ==================
 */
+void CL_Disconnect_f( void );
+
+/*
+==================
+CL_VoipMute_f
+==================
+*/
+void CL_VoipMute_f(void) {
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: cl_voipMute <clientNum>\n");
+        return;
+    }
+
+    int clientNum = atoi(Cmd_Argv(1));
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        Com_Printf("Invalid client number.\n");
+        return;
+    }
+
+    clc.voipIgnore[clientNum] = qtrue;
+    Com_Printf("Muted client %d\n", clientNum);
+}
+
+/*
+==================
+CL_VoipUnmute_f
+==================
+*/
+void CL_VoipUnmute_f(void) {
+    if (Cmd_Argc() != 2) {
+        Com_Printf("Usage: cl_voipUnmute <clientNum>\n");
+        return;
+    }
+
+    int clientNum = atoi(Cmd_Argv(1));
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        Com_Printf("Invalid client number.\n");
+        return;
+    }
+
+    clc.voipIgnore[clientNum] = qfalse;
+    Com_Printf("Unmuted client %d\n", clientNum);
+}
+
+/*
+==================
+CL_VoipGain_f
+==================
+*/
+void CL_VoipGain_f(void) {
+    if (Cmd_Argc() != 3) {
+        Com_Printf("Usage: cl_voipGain <clientNum> <gain>\n");
+        return;
+    }
+
+    int clientNum = atoi(Cmd_Argv(1));
+    float gain = atof(Cmd_Argv(2));
+
+    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
+        Com_Printf("Invalid client number.\n");
+        return;
+    }
+    
+    if (gain < 0.0f) gain = 0.0f;
+    if (gain > 10.0f) gain = 10.0f; // Cap it reasonable
+
+    clc.voipGain[clientNum] = gain;
+    Com_Printf("Set gain for client %d to %.2f\n", clientNum, gain);
+}
+
+/*
+==================
+CL_VoipListMuted_f
+==================
+*/
+void CL_VoipListMuted_f(void) {
+    int i;
+    int mutedCount = 0;
+    
+    Com_Printf("VoIP Muted Clients:\n");
+    Com_Printf("-------------------\n");
+    
+    for (i = 0; i < MAX_CLIENTS; i++) {
+        if (clc.voipIgnore[i]) {
+            Com_Printf("  Client %d: MUTED (gain: %.2f)\n", i, clc.voipGain[i]);
+            mutedCount++;
+        }
+    }
+    
+    if (mutedCount == 0) {
+        Com_Printf("  No clients are currently muted.\n");
+    } else {
+        Com_Printf("-------------------\n");
+        Com_Printf("Total muted: %d\n", mutedCount);
+    }
+}
+
+/*
+==================
+CL_VoipMuteAll_f
+==================
+*/
+void CL_VoipMuteAll_f(void) {
+    clc.voipMuteAll = !clc.voipMuteAll;
+    Com_Printf("VoIP mute all: %s\n", clc.voipMuteAll ? "ON" : "OFF");
+}
 void CL_Disconnect_f( void ) {
 	qboolean bConsoleState;
 
@@ -1371,6 +1492,17 @@ void CL_Connect( const char *server, netadrtype_t family ) {
 		// Set a client challenge number that ideally is mirrored back by the server.
 		clc.challenge = (((unsigned int)rand() << 16) ^ (unsigned int)rand()) ^ Com_Milliseconds();
 	}
+
+#ifdef USE_VOIP
+#ifdef __cplusplus
+	clc.voiceCodec = new VoiceCodec();
+	if (clc.voiceCodec) {
+		clc.voiceCodec->Init();
+        if (voip_bitrate)
+            clc.voiceCodec->SetBitrate(voip_bitrate->integer);
+	}
+#endif
+#endif
 
 	clc.connectTime = -99999;	// CL_CheckForResend() will fire immediately
 	clc.connectPacketCount = 0;
@@ -2666,6 +2798,122 @@ CL_Frame
 
 ==================
 */
+
+#ifdef USE_VOIP
+void CL_WriteVoipPacket( const byte *data, int len ) {
+	if (!data || len <= 0) return;
+	if (len > (int)sizeof(clc.voipOutgoingData) - clc.voipOutgoingDataSize) {
+		Com_Printf("VoIP: Outgoing buffer full, dropping packet\n");
+		return;
+	}
+	memcpy(clc.voipOutgoingData + clc.voipOutgoingDataSize, data, len);
+	clc.voipOutgoingDataSize += len;
+	clc.voipOutgoingDataFrames++;
+	
+	static int lastLog = 0;
+	if (cls.realtime - lastLog > 2000) {
+		Com_Printf("VoIP CLIENT: Buffered %d bytes, total buffered=%d, frames=%d\n", 
+			len, clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
+		lastLog = cls.realtime;
+	}
+}
+
+void CL_VoipFrame(void) {
+	if (!cl_voip || !cl_voip->integer) {
+		clc.voipPower = 0;
+		Cvar_Set("s_voipLevel", "0");
+		return;
+	}
+
+	cvar_t *cl_voipSend = Cvar_Get("cl_voipSend", "0", 0);
+	bool capturing = (cl_voipSend && cl_voipSend->integer && clc.state >= CA_CONNECTED);
+
+	// Update targets and flags based on send target cvar
+	cvar_t *targetCvar = Cvar_Get("cl_voipSendTarget", "spatial", 0);
+	if (!Q_stricmp(targetCvar->string, "spatial")) {
+		clc.voipFlags = VOIP_SPATIAL;
+		Com_Memset(clc.voipTargets, 0, sizeof(clc.voipTargets)); // Spatial doesn't need targets bitmask
+	} else if (!Q_stricmp(targetCvar->string, "direct")) {
+		clc.voipFlags = VOIP_DIRECT;
+		Com_Memset(clc.voipTargets, ~0, sizeof(clc.voipTargets)); // All targets
+	} else {
+		// "all" or other
+		clc.voipFlags = VOIP_SPATIAL | VOIP_DIRECT;
+		Com_Memset(clc.voipTargets, ~0, sizeof(clc.voipTargets));
+	}
+
+	// Always start capture if VoIP is enabled, so the meter works
+	S_StartCapture();
+	
+	int available = S_AvailableCaptureSamples();
+	static short pcmBuffer[960]; // 20ms at 48kHz
+	static int pcmBufferCount = 0;
+	const int FRAME_SIZE = 960; 
+
+	// Capture in chunks
+	while (available > 0) {
+		int space = FRAME_SIZE - pcmBufferCount;
+		int toRead = available > space ? space : available;
+		
+		if (toRead > 0) {
+			S_Capture(toRead, (byte*)(pcmBuffer + pcmBufferCount));
+			pcmBufferCount += toRead;
+			available -= toRead;
+		}
+
+		if (pcmBufferCount >= FRAME_SIZE) {
+			// Calculate power/volume for HUD gauge
+			int i;
+			float total = 0;
+			for (i = 0; i < FRAME_SIZE; i++) {
+				float sample = pcmBuffer[i] / 32768.0f;
+				total += sample * sample;
+			}
+			// RMS power with smoothing
+			float currentPower = sqrtf(total / FRAME_SIZE) * 5.0f; // Scale it up for visibility
+			clc.voipPower = (clc.voipPower * 0.7f) + (currentPower * 0.3f);
+			if (clc.voipPower > 1.0f) clc.voipPower = 1.0f;
+
+			// Also update the cvar if we are connected or in a menu (for the meter)
+			// Actually the cvar is updated inside S_Capture now too, but we can enforce it here if needed.
+			// But wait, if S_Capture already updates it, we don't need to do it here.
+
+			if (capturing && clc.voiceCodec) {
+				unsigned char packet[1024];
+				int len = clc.voiceCodec->Encode(pcmBuffer, FRAME_SIZE, packet, sizeof(packet));
+				
+				// NOISY DEBUG
+				static int lastEnc = 0;
+				if (cls.realtime - lastEnc > 1000) {
+					Com_Printf("VoIP: Encoded frame, len=%d, voipPower=%.2f\n", len, clc.voipPower);
+					lastEnc = cls.realtime;
+				}
+
+				if (len > 0) {
+					CL_WriteVoipPacket(packet, len);
+					
+					// ECHO TEST - Only if enabled
+					if (Cvar_VariableIntegerValue("cl_voipEcho")) {
+						short decoded[960];
+						int samples = clc.voiceCodec->Decode(clc.clientNum, packet, len, decoded, 960, qfalse);
+						if (samples > 0) {
+							S_RawSamples(1, samples, 48000, 2, 1, (byte*)decoded, 1.0f, -1);
+						}
+					}
+				}
+			}
+			pcmBufferCount = 0;
+		}
+	}
+
+	if (!capturing && !UI_MenuActive()) {
+		// If not capturing and not in menu, we could stop capture to save resources,
+		// but let's keep it simple for now and keep it running if VoIP is enabled.
+		// S_StopCapture(); 
+	}
+}
+#endif
+
 void CL_Frame ( int msec ) {
 
 	if ( !com_cl_running->integer ) {
@@ -2805,6 +3053,10 @@ void CL_Frame ( int msec ) {
 
 	// send intentions now
 	CL_SendCmd();
+
+#ifdef USE_VOIP
+	CL_VoipFrame();
+#endif
 
 	// resend a connection request if necessary
 	CL_CheckForResend();
@@ -3596,6 +3848,14 @@ void CL_Init( void ) {
 	cl_maxpackets = Cvar_Get ("cl_maxpackets", "30", CVAR_ARCHIVE );
 	cl_packetdup = Cvar_Get ("cl_packetdup", "1", CVAR_ARCHIVE );
 
+#ifdef USE_VOIP
+	cl_voip = Cvar_Get("cl_voip", "1", CVAR_ARCHIVE);
+    voip_bitrate = Cvar_Get("voip_bitrate", "32000", CVAR_ARCHIVE);
+	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE); // 1 = play back to self
+	Cvar_Get("cl_voipProtocol", "opus", CVAR_USERINFO | CVAR_ROM);
+    clc.voipEnabled = cl_voip->integer; 
+#endif
+
 	cl_run = Cvar_Get( "cl_run", "1", CVAR_ARCHIVE );
 	cl_sensitivity = Cvar_Get( "sensitivity", "5", CVAR_ARCHIVE );
     cl_mouseAccel = Cvar_Get("cl_mouseAccel", "0", CVAR_ARCHIVE);
@@ -3704,6 +3964,11 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
+	Cmd_AddCommand ("cl_voipMute", CL_VoipMute_f);
+	Cmd_AddCommand ("cl_voipUnmute", CL_VoipUnmute_f);
+    Cmd_AddCommand ("cl_voipGain", CL_VoipGain_f);
+    Cmd_AddCommand ("cl_voipListMuted", CL_VoipListMuted_f);
+    Cmd_AddCommand ("cl_voipMuteAll", CL_VoipMuteAll_f);
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);

@@ -86,6 +86,14 @@ void S_SoundDump_f()
     S_DumpInfo();
 }
 
+
+#ifdef USE_VOIP
+extern "C" {
+void SNDDMA_InitCapture(void);
+void SNDDMA_ShutdownCapture(void);
+}
+#endif
+
 /*
 ==============
 S_Init
@@ -137,6 +145,10 @@ void S_Init(qboolean full_startup)
         s_bSoundStarted = 0;
     }
 
+#ifdef USE_VOIP
+    SNDDMA_InitCapture();
+#endif
+
     iEnd = Sys_Milliseconds();
     Com_Printf("------- Sound Initialization Complete ------- %i ms\n", iEnd - iStart);
 }
@@ -158,6 +170,10 @@ void S_Shutdown(qboolean full_shutdown)
     Com_Printf("------- Sound Shutdown (%s) -------\n", full_shutdown ? "full" : "partial");
 
     S_Driver_Shutdown();
+
+#ifdef USE_VOIP
+    SNDDMA_ShutdownCapture();
+#endif
     s_bSoundStarted = false;
 
     Cmd_RemoveCommand("play");
@@ -798,6 +814,40 @@ void S_ClearSoundBuffer()
 {
     // TODO: Remove once AL is fully implemented
 }
+
+#ifdef USE_VOIP
+extern "C" {
+void SNDDMA_StartCapture(void);
+int SNDDMA_AvailableCaptureSamples(void);
+void SNDDMA_Capture(int samples, byte *data);
+void SNDDMA_StopCapture(void);
+void SNDDMA_MasterGain(float val);
+
+void S_StartCapture(void) {
+	SNDDMA_StartCapture();
+}
+
+int S_AvailableCaptureSamples(void) {
+	return SNDDMA_AvailableCaptureSamples();
+}
+
+void S_Capture(int samples, byte *data) {
+	SNDDMA_Capture(samples, data);
+}
+
+void S_StopCapture(void) {
+	SNDDMA_StopCapture();
+}
+
+void S_MasterGain(float gain) {
+	SNDDMA_MasterGain(gain);
+}
+
+void S_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum) {
+    S_Driver_RawSamples(stream, samples, rate, width, channels, data, volume, entityNum);
+}
+}
+#endif
 
 /*
 ==============

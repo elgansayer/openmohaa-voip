@@ -5043,3 +5043,77 @@ unsigned int openal_channel_two_d_stream::getBitsPerSample() const
 
     return bits * channels;
 }
+
+/*
+==============
+S_OPENAL_RawSamples
+==============
+*/
+void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum)
+{
+	static ALuint voipBuffers[MAX_CLIENTS][16];
+	static int voipBufferIndex[MAX_CLIENTS];
+	static ALuint voipSources[MAX_CLIENTS];
+	static qboolean voipInited = qfalse;
+	
+	// 1-based stream ID from CL_PlayVoip
+	int clientNum = stream - 1; 
+
+	// Handle spatial streams (offset by MAX_CLIENTS)
+	if (clientNum >= MAX_CLIENTS) {
+		clientNum -= MAX_CLIENTS;
+	}
+	ALuint buffer;
+	ALint state;
+	int processed;
+	ALenum format;
+
+	if (!al_initialized) return;
+
+	if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
+
+	// One-time init for VoIP sources
+	if (!voipInited) {
+		int i;
+		for (i = 0; i < MAX_CLIENTS; i++) {
+			qalGenSources(1, &voipSources[i]);
+			qalSourcef(voipSources[i], AL_GAIN, 1.0f);
+			qalSourcei(voipSources[i], AL_SOURCE_RELATIVE, AL_TRUE);
+			voipBufferIndex[i] = 0;
+            // Initialize buffer pool (optional, doing generation on fly for now but deleting them)
+		}
+		voipInited = qtrue;
+	}
+
+	// Determine format
+	if (width == 2) {
+		if (channels == 1) format = AL_FORMAT_MONO16;
+		else format = AL_FORMAT_STEREO16;
+	} else {
+		if (channels == 1) format = AL_FORMAT_MONO8;
+		else format = AL_FORMAT_STEREO8;
+	}
+
+	// Update volume/position
+	qalSourcef(voipSources[clientNum], AL_GAIN, volume * s_volume->value);
+
+	// Unqueue processed buffers to free them
+	qalGetSourcei(voipSources[clientNum], AL_BUFFERS_PROCESSED, &processed);
+	while (processed--) {
+		ALuint unqueued;
+		qalSourceUnqueueBuffers(voipSources[clientNum], 1, &unqueued);
+		qalDeleteBuffers(1, &unqueued);
+	}
+
+	// Create and fill new buffer
+	qalGenBuffers(1, &buffer);
+	qalBufferData(buffer, format, data, samples * width * channels, rate);
+
+	// Queue and play
+	qalSourceQueueBuffers(voipSources[clientNum], 1, &buffer);
+
+	qalGetSourcei(voipSources[clientNum], AL_SOURCE_STATE, &state);
+	if (state != AL_PLAYING) {
+		qalSourcePlay(voipSources[clientNum]);
+	}
+}
