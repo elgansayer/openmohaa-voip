@@ -3036,7 +3036,7 @@ void CL_VoipFrame(void) {
 				unsigned char packet[1024];
 				int len = clc.voiceCodec->Encode(pcmBuffer, FRAME_SIZE, packet, sizeof(packet));
 				
-				// NOISY DEBUG
+				// FU DEBUG
 				/*
 				static int lastEnc = 0;
 				if (cls.realtime - lastEnc > 1000) {
@@ -3062,9 +3062,9 @@ void CL_VoipFrame(void) {
 		}
 	}
 
+	// take a breal, think about it
 	if (!capturing && !UI_MenuActive()) {
-		// If not capturing and not in menu, we could stop capture to save resources,
-		// but let's keep it simple for now and keep it running if VoIP is enabled.
+		// Keep capture running so the HUD meter works even when not transmitting (for testing mic).
 		// S_StopCapture(); 
 	}
 }

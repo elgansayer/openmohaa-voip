@@ -2031,11 +2031,14 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		}
 	}
 
-	// !!! FIXME: see if we read past end of msg...
+	// Check bounds
+	if ( (msg->readcount + packetsize) > msg->cursize ) {
+		return;
+	}
 
-	// !!! FIXME: reject if not opus data.
-	// !!! FIXME: decide if this is bogus data?
-
+	// We only support Opus. The packet contains raw Opus frames.
+	// Since we don't have a codec header, we assume it's valid Opus or the decoder will just fail/skip it.
+	
 	// decide who needs this VoIP packet sent to them...
 	for (i = 0, client = svs.clients; i < sv_maxclients->integer ; i++, client++) {
 		
@@ -2045,7 +2048,6 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 
 		// Team-Only VoIP Filtering
 		// Check if sender wants to restrict to team
-		static char val[2];
 		if ( Info_ValueForKey( cl->userinfo, "cl_voipTeamOnly" )[0] == '1' ) {
             // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
             // Access team via playerState_t which is visible to engine
@@ -2060,10 +2062,7 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
                 int destTeam = destEnt->client->ps.stats[STAT_TEAM];
 
                 if (senderTeam == TEAM_SPECTATOR) {
-                     // Spectators can usually talk to everyone or other spectators?
-                     // For 'TeamOnly', maybe just other spectators? 
-                     // Let's assume Spectators talk to Spectators
-                     if (destTeam != TEAM_SPECTATOR) continue;
+                     // Spectators can talk to everyone
                 } else if (senderTeam != destTeam) {
                     continue; // Different team, skip
                 }
