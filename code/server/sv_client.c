@@ -2039,6 +2039,29 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 	// We only support Opus. The packet contains raw Opus frames.
 	// Since we don't have a codec header, we assume it's valid Opus or the decoder will just fail/skip it.
 	
+	// Parse 'cl_voipSendTarget' from userinfo *once*
+	char sendTarget[MAX_CVAR_VALUE_STRING];
+	Q_strncpyz(sendTarget, Info_ValueForKey(cl->userinfo, "cl_voipSendTarget"), sizeof(sendTarget));
+	
+	int crosshairTargetNum = -1;
+	qboolean isCrosshair = !Q_stricmp(sendTarget, "crosshair");
+	qboolean isAttacker = !Q_stricmp(sendTarget, "attacker");
+	qboolean isTeam = !Q_stricmp(sendTarget, "team") || Info_ValueForKey(cl->userinfo, "cl_voipTeamOnly")[0] == '1';
+
+	// Pre-calculate Crosshair Target
+	if (isCrosshair) {
+		trace_t tr;
+		vec3_t start, end, forward;
+		
+		VectorCopy(cl->gentity->client->ps.origin, start);
+		start[2] += cl->gentity->client->ps.viewheight;
+		AngleVectors(cl->gentity->client->ps.viewangles, forward, NULL, NULL);
+		VectorMA(start, 8192, forward, end);
+		SV_Trace(&tr, start, NULL, NULL, end, sender, MASK_SHOT, qfalse, qfalse);
+		
+		crosshairTargetNum = tr.entityNum;
+	}
+
 	// decide who needs this VoIP packet sent to them...
 	for (i = 0, client = svs.clients; i < sv_maxclients->integer ; i++, client++) {
 		
@@ -2046,51 +2069,25 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 			continue;
 		}
 
-
-
-		// Parse 'cl_voipSendTarget' from userinfo
-		char sendTarget[MAX_CVAR_VALUE_STRING];
-		Q_strncpyz(sendTarget, Info_ValueForKey(cl->userinfo, "cl_voipSendTarget"), sizeof(sendTarget));
-		
-		qboolean skipClient = qfalse;
-
 		// 1. Crosshair Targeting
-		if (!Q_stricmp(sendTarget, "crosshair")) {
-			// Do a trace from sender's eyes
-			trace_t tr;
-			vec3_t start, end, forward;
-			
-			// Calculate start position (Origin + ViewHeight)
-			VectorCopy(cl->gentity->client->ps.origin, start);
-			start[2] += cl->gentity->client->ps.viewheight;
-
-			// Calculate end position (Start + Forward * Range)
-			AngleVectors(cl->gentity->client->ps.viewangles, forward, NULL, NULL);
-			VectorMA(start, 8192, forward, end); // 8192 world units range
-
-			// Perform Trace
-			// MASK_SHOT or MASK_PLAYERSOLID
-			SV_Trace(&tr, start, NULL, NULL, end, sender, MASK_SHOT, qfalse, qfalse);
-
-			if (tr.entityNum != i) {
-				skipClient = qtrue;
+		if (isCrosshair) {
+			if (crosshairTargetNum != i) {
+				continue; // Skip if not the target
 			}
 		}
 		// 2. Attacker Targeting
-		else if (!Q_stricmp(sendTarget, "attacker")) {
-			// FIXME: OpenMOHAA playerState_t does not have persistant[PERS_ATTACKER].
-			// Needs Game module support to expose attacker via stats or events.
-			// For now, this is disabled.
+		else if (isAttacker) {
+			// FIXME: Disabled
 			/*
 			int attackerNum = cl->gentity->client->ps.persistant[PERS_ATTACKER];
 			if (attackerNum < 0 || attackerNum >= sv_maxclients->integer || attackerNum != i) {
-				skipClient = qtrue;
+				continue;
 			}
 			*/
 		}
 		// 3. Team Targeting
-		else if (!Q_stricmp(sendTarget, "team") || Info_ValueForKey(cl->userinfo, "cl_voipTeamOnly")[0] == '1') {
-             // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
+		else if (isTeam) {
+            // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
             // Access team via playerState_t which is visible to engine
             // NOTE: svs.clients[i].gentity is the gentity
             gentity_t *senderEnt = cl->gentity;
@@ -2105,12 +2102,10 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
                 if (senderTeam == TEAM_SPECTATOR) {
                      // Spectators can talk to everyone
                 } else if (senderTeam != destTeam) {
-                    skipClient = qtrue; 
+                    continue; 
                 }
             }
 		}
-
-		if (skipClient) continue;
 
 		// Network Loopback Enabled for Testing
 		/*
