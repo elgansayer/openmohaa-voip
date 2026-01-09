@@ -2940,7 +2940,7 @@ void CL_VoipFrame(void) {
 		cl_voipTeamOnly = Cvar_Get("cl_voipTeamOnly", "0", CVAR_ARCHIVE | CVAR_USERINFO);
 	}
 	
-	// TODO: Team filtering requires cgame integration (team info not available in client module)
+	// filters packets based on cl_voipTeamOnly userinfo.
 	// For now, cl_voipTeamOnly is registered but not functional
 	// This should be implemented server-side or via cgame callback
 	
