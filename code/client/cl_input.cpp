@@ -995,43 +995,53 @@ void CL_WritePacket( void ) {
 			
 		if((clc.voipFlags & VOIP_SPATIAL) || Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1))
 		{
-			Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes)\n", clc.voipOutgoingDataSize);
-			MSG_WriteByte (&buf, clc_voipOpus);
-			MSG_WriteByte (&buf, clc.voipOutgoingGeneration);
-			MSG_WriteLong (&buf, clc.voipOutgoingSequence);
-			MSG_WriteByte (&buf, clc.voipOutgoingDataFrames);
-			MSG_WriteData (&buf, clc.voipTargets, sizeof(clc.voipTargets));
-			MSG_WriteByte(&buf, clc.voipFlags);
-			MSG_WriteShort (&buf, clc.voipOutgoingDataSize);
-			MSG_WriteData (&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
+			// Bandwidth Control: sv_voipEncapsulation
+			// Default 1: Send every frame (20ms)
+			// > 1: Bundle 'n' frames before sending to reduce packet overhead
+			int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
+			if (encapsulation <= 0) encapsulation = 1;
 
-			// If we're recording a demo, we have to fake a server packet with
-			//  this VoIP data so it gets to disk; the server doesn't send it
-			//  back to us, and we might as well eliminate concerns about dropped
-			//  and misordered packets here.
-			if(clc.demorecording && !clc.demowaiting)
-			{
-				const int voipSize = clc.voipOutgoingDataSize;
-				msg_t fakemsg;
-				byte fakedata[MAX_MSGLEN];
-				MSG_Init (&fakemsg, fakedata, sizeof (fakedata));
-				MSG_Bitstream (&fakemsg);
-				MSG_WriteLong (&fakemsg, clc.reliableAcknowledge);
-				MSG_WriteByte (&fakemsg, svc_voipOpus);
-				MSG_WriteShort (&fakemsg, clc.clientNum);
-				MSG_WriteByte (&fakemsg, clc.voipOutgoingGeneration);
-				MSG_WriteLong (&fakemsg, clc.voipOutgoingSequence);
-				MSG_WriteByte (&fakemsg, clc.voipOutgoingDataFrames);
-				MSG_WriteShort (&fakemsg, clc.voipOutgoingDataSize );
-				MSG_WriteBits (&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
-				MSG_WriteData (&fakemsg, clc.voipOutgoingData, voipSize);
-				MSG_WriteByte (&fakemsg, svc_EOF);
-				CL_WriteDemoMessage (&fakemsg, 0);
+			// If we haven't buffered enough frames yet, and buffer isn't dangerously full, wait.
+			if (clc.voipOutgoingDataFrames < encapsulation && 
+				clc.voipOutgoingDataSize < sizeof(clc.voipOutgoingData) - 200) {
+				// Keep buffering
+			} else {
+				Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes, %d frames)\n", 
+					clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
+				MSG_WriteByte (&buf, clc_voipOpus);
+				MSG_WriteByte (&buf, clc.voipOutgoingGeneration);
+				MSG_WriteLong (&buf, clc.voipOutgoingSequence);
+				MSG_WriteByte (&buf, clc.voipOutgoingDataFrames);
+				MSG_WriteData (&buf, clc.voipTargets, sizeof(clc.voipTargets));
+				MSG_WriteByte(&buf, clc.voipFlags);
+				MSG_WriteShort (&buf, clc.voipOutgoingDataSize);
+				MSG_WriteData (&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
+
+				// If we're recording a demo, we have to fake a server packet...
+				if(clc.demorecording && !clc.demowaiting)
+				{
+					const int voipSize = clc.voipOutgoingDataSize;
+					msg_t fakemsg;
+					byte fakedata[MAX_MSGLEN];
+					MSG_Init (&fakemsg, fakedata, sizeof (fakedata));
+					MSG_Bitstream (&fakemsg);
+					MSG_WriteLong (&fakemsg, clc.reliableAcknowledge);
+					MSG_WriteByte (&fakemsg, svc_voipOpus);
+					MSG_WriteShort (&fakemsg, clc.clientNum);
+					MSG_WriteByte (&fakemsg, clc.voipOutgoingGeneration);
+					MSG_WriteLong (&fakemsg, clc.voipOutgoingSequence);
+					MSG_WriteByte (&fakemsg, clc.voipOutgoingDataFrames);
+					MSG_WriteShort (&fakemsg, clc.voipOutgoingDataSize );
+					MSG_WriteBits (&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
+					MSG_WriteData (&fakemsg, clc.voipOutgoingData, voipSize);
+					MSG_WriteByte (&fakemsg, svc_EOF);
+					CL_WriteDemoMessage (&fakemsg, 0);
+				}
+
+				clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
+				clc.voipOutgoingDataSize = 0;
+				clc.voipOutgoingDataFrames = 0;
 			}
-
-			clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
-			clc.voipOutgoingDataSize = 0;
-			clc.voipOutgoingDataFrames = 0;
 		}
 		else
 		{

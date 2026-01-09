@@ -1077,6 +1077,7 @@ void SV_Init (void)
 	sv_voip = Cvar_Get("sv_voip", "1", CVAR_LATCH);
 	Cvar_CheckRange(sv_voip, 0, 1, qtrue);
 	sv_voipProtocol = Cvar_Get("sv_voipProtocol", "opus", CVAR_SYSTEMINFO);
+	sv_voipEncapsulation = Cvar_Get("sv_voipEncapsulation", "1", CVAR_SYSTEMINFO);
 #endif
 	Cvar_Get ("sv_paks", "", CVAR_SYSTEMINFO | CVAR_ROM );
 	Cvar_Get ("sv_pakNames", "", CVAR_SYSTEMINFO | CVAR_ROM );

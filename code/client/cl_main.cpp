@@ -127,13 +127,14 @@ cvar_t	*wombat;
 cvar_t	*cl_r_fullscreen;
 
 cvar_t	*cl_consoleKeys;
-cvar_t	*name;
+cvar_t	*cl_name;
 cvar_t	*cl_rate;
 
 clientActive_t		cl;
 clientConnection_t	clc;
 #ifdef USE_VOIP
 cvar_t *cl_voip = NULL;
+cvar_t *cl_voipSend = NULL;
 cvar_t *voip_bitrate = NULL;
 cvar_t *cl_voipLoopback = NULL;
 cvar_t *cl_voipCaptureMult = NULL;
@@ -269,9 +270,9 @@ CL_ChangeReliableCommand
 ======================
 */
 void CL_ChangeReliableCommand( void ) {
-	size_t r, index, l;
+	size_t index, l;
 
-	r = clc.reliableSequence - (random() * 5);
+	// r = clc.reliableSequence - (random() * 5); // Unused
 	index = clc.reliableSequence & ( MAX_RELIABLE_COMMANDS - 1 );
 	l = strlen(clc.reliableCommands[ index ]);
 	if ( l >= MAX_STRING_CHARS - 1 ) {
@@ -2203,7 +2204,7 @@ wombat: sending conect here: an example connect string from MOHAA looks like thi
 
         // sanitize the name before sending it
 	    char szSanitizedName[MAX_NAME_LENGTH];
-		if (Com_SanitizeName(name->string, szSanitizedName, sizeof(szSanitizedName))) {
+		if (Com_SanitizeName(cl_name->string, szSanitizedName, sizeof(szSanitizedName))) {
 			Cvar_Set("name", szSanitizedName);
 		}
 
@@ -2760,7 +2761,7 @@ void CL_CheckUserinfo( void ) {
 	// send a reliable userinfo update if needed
 	if(cvar_modifiedFlags & CVAR_USERINFO)
 	{
-		if (Com_SanitizeName(name->string, szSanitizedName, sizeof(szSanitizedName))) {
+		if (Com_SanitizeName(cl_name->string, szSanitizedName, sizeof(szSanitizedName))) {
 			Cvar_Set("name", szSanitizedName);
 		}
 
@@ -2886,10 +2887,10 @@ void CL_VoipFrame(void) {
         oldMuteMask = muteMask;
     }
 
-	cvar_t *cl_voipSend = Cvar_Get("cl_voipSend", "0", 0);
+	// cvar_t *cl_voipSend = Cvar_Get("cl_voipSend", "0", 0); // Use global
     // VAD Variables
-    static cvar_t *cl_voipUseVAD = NULL;
-    static cvar_t *cl_voipVADThreshold = NULL;
+    // static cvar_t *cl_voipUseVAD = NULL;
+    // static cvar_t *cl_voipVADThreshold = NULL;
     if (!cl_voipUseVAD) {
         cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "1", CVAR_ARCHIVE);
         cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE); // Lowered from 0.25 for better sensitivity
@@ -4113,7 +4114,7 @@ void CL_Init( void ) {
 	cl_consoleKeys = Cvar_Get( "cl_consoleKeys", "~ ` 0x7e 0x60", CVAR_ARCHIVE );
 
 	// userinfo
-	name = Cvar_Get ("name", va("UnnamedSoldier#%d", rand() % 100000), CVAR_USERINFO | CVAR_ARCHIVE);
+	cl_name = Cvar_Get ("name", va("UnnamedSoldier#%d", rand() % 100000), CVAR_USERINFO | CVAR_ARCHIVE);
 	cl_rate = Cvar_Get ("rate", "25000", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("snaps", "20", CVAR_USERINFO | CVAR_ARCHIVE );
 	Cvar_Get ("password", "", CVAR_USERINFO);

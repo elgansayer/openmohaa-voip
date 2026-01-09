@@ -2046,10 +2046,51 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 			continue;
 		}
 
-		// Team-Only VoIP Filtering
-		// Check if sender wants to restrict to team
-		if ( Info_ValueForKey( cl->userinfo, "cl_voipTeamOnly" )[0] == '1' ) {
-            // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
+
+
+		// Parse 'cl_voipSendTarget' from userinfo
+		char sendTarget[MAX_CVAR_VALUE_STRING];
+		Q_strncpyz(sendTarget, Info_ValueForKey(cl->userinfo, "cl_voipSendTarget"), sizeof(sendTarget));
+		
+		qboolean skipClient = qfalse;
+
+		// 1. Crosshair Targeting
+		if (!Q_stricmp(sendTarget, "crosshair")) {
+			// Do a trace from sender's eyes
+			trace_t tr;
+			vec3_t start, end, forward;
+			
+			// Calculate start position (Origin + ViewHeight)
+			VectorCopy(cl->gentity->client->ps.origin, start);
+			start[2] += cl->gentity->client->ps.viewheight;
+
+			// Calculate end position (Start + Forward * Range)
+			AngleVectors(cl->gentity->client->ps.viewangles, forward, NULL, NULL);
+			VectorMA(start, 8192, forward, end); // 8192 world units range
+
+			// Perform Trace
+			// MASK_SHOT or MASK_PLAYERSOLID
+			SV_Trace(&tr, start, NULL, NULL, end, sender, MASK_SHOT, qfalse, qfalse);
+
+			if (tr.entityNum != i) {
+				skipClient = qtrue;
+			}
+		}
+		// 2. Attacker Targeting
+		else if (!Q_stricmp(sendTarget, "attacker")) {
+			// FIXME: OpenMOHAA playerState_t does not have persistant[PERS_ATTACKER].
+			// Needs Game module support to expose attacker via stats or events.
+			// For now, this is disabled.
+			/*
+			int attackerNum = cl->gentity->client->ps.persistant[PERS_ATTACKER];
+			if (attackerNum < 0 || attackerNum >= sv_maxclients->integer || attackerNum != i) {
+				skipClient = qtrue;
+			}
+			*/
+		}
+		// 3. Team Targeting
+		else if (!Q_stricmp(sendTarget, "team") || Info_ValueForKey(cl->userinfo, "cl_voipTeamOnly")[0] == '1') {
+             // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
             // Access team via playerState_t which is visible to engine
             // NOTE: svs.clients[i].gentity is the gentity
             gentity_t *senderEnt = cl->gentity;
@@ -2064,17 +2105,21 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
                 if (senderTeam == TEAM_SPECTATOR) {
                      // Spectators can talk to everyone
                 } else if (senderTeam != destTeam) {
-                    continue; // Different team, skip
+                    skipClient = qtrue; 
                 }
             }
 		}
+
+		if (skipClient) continue;
+
 		// Network Loopback Enabled for Testing
 		/*
-		else if (i == sender) {
+		if (i == sender) {
 			continue;
 		}
 		*/
-		else if (!client->hasVoip) {
+		
+		if (!client->hasVoip) {
 			continue;
 		}
 		else if (client->muteAllVoip) {

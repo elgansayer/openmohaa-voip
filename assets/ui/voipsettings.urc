@@ -207,6 +207,31 @@ resource CheckBox {
     font "verdana-12"
 }
 
+// ----------------------------------------------------
+// Targeting
+// ----------------------------------------------------
+resource Label {
+    name "voip_target_label"
+    rect 10 320 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Send Target:"
+}
+resource Label {
+    name "voip_target_value"
+    rect 200 320 100 20
+    fgcolor 0.7 0.9 1.0 1
+    font "verdana-12"
+    linkcvar "cl_voipSendTarget"
+}
+resource Button {
+    name "voip_target_cycle"
+    rect 310 320 80 20
+    font "verdana-12"
+    title "Cycle"
+    stuffcommand "vstr next_target"
+}
+
 resource Label {
     name "voip_muteall_label"
     rect 10 295 180 20

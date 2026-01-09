@@ -27,6 +27,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifdef USE_VOIP
 cvar_t *sv_voip;
 cvar_t *sv_voipProtocol;
+cvar_t *sv_voipEncapsulation;
 #endif
 
 serverStatic_t	svs;				// persistant server info
