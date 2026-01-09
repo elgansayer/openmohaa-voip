@@ -371,6 +371,34 @@ static void CG_DrawServerLag()
 
 /*
 ==============
+CG_DrawVoipMeter
+==============
+*/
+void CG_DrawVoipMeter(void)
+{
+    float x, y, w, h;
+
+    if (!cg_voipSend || !cg_voipSend->integer) {
+        return;
+    }
+
+    // Set coordinates in virtual 640x480 space
+    // Position: Bottom Left
+    w = 32;
+    h = 32;
+    x = 10;
+    y = 480 - h - 10;
+
+    // Adjust for current resolution and aspect ratio
+    CG_AdjustFrom640(&x, &y, &w, &h);
+
+    cgi.R_SetColor(NULL);
+    cgi.R_DrawStretchPic(x, y, w, h, 0, 1, 1, 0, cgs.media.voipIconShader);
+}
+
+
+/*
+==============
 CG_DrawIcons
 ==============
 */
@@ -1518,6 +1546,7 @@ void CG_Draw2D(void)
     CG_DrawLagometer();
     CG_HudDrawElements();
     CG_DrawObjectives();
+    CG_DrawVoipMeter();
     CG_DrawIcons();
     CG_DrawStopwatch();
     CG_DrawSpectatorView();

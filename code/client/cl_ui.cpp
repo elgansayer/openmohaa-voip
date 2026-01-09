@@ -2394,67 +2394,6 @@ void UI_Update(void)
     }
 
     uWinMan.UpdateViews();
-
-#ifdef USE_VOIP
-	// VoIP indicator drawing at highest UI level
-	if (cl_voip && cl_voip->integer && clc.state >= CA_CONNECTED) {
-		float vx = cls.glconfig.vidWidth - 150;
-		float vy = 10;
-		vec4_t v_white = {1.0f, 1.0f, 1.0f, 1.0f};
-		vec4_t v_black = {0.0f, 0.0f, 0.0f, 0.8f};
-		vec4_t v_levelBg = {0.3f, 0.3f, 0.3f, 1.0f};
-		
-		bool recording = Cvar_VariableIntegerValue("cl_voipSend") != 0;
-
-		// Debug: confirm we're drawing
-		static int lastDbg = 0;
-		if (cls.realtime - lastDbg > 2000) {
-			Com_Printf("VoIP: UI_Update drawing indicator, recording=%d power=%.2f\n", recording, clc.voipPower);
-			lastDbg = cls.realtime;
-		}
-
-		// Codec Health Check
-		if (!clc.voiceCodec) {
-			vec4_t errorColor = {1.0f, 0.0f, 0.0f, 1.0f};
-			SCR_DrawBigStringColor(10, 50, "VOIP CODEC ERROR", errorColor, qtrue);
-		}
-
-		// Dark Box Background using SCR_FillRect
-		SCR_FillRect(vx, vy, 140, 60, v_black);
-
-		if (recording) {
-			// Pulse red bar
-			vec4_t v_recColor = {0.8f, 0.0f, 0.0f, 1.0f};
-			if ((cls.realtime / 400) % 2) { 
-				v_recColor[0] = 1.0f; v_recColor[1] = 0.2f; v_recColor[2] = 0.2f; 
-			}
-			SCR_FillRect(vx + 5, vy + 5, 130, 20, v_recColor);
-			SCR_DrawBigStringColor(vx + 30, vy + 8, "REC", v_white, qtrue);
-			SCR_DrawBigStringColor(10, 10, va("RECORDING %.2f", clc.voipPower), v_white, qtrue);
-		} else {
-			SCR_DrawBigStringColor(vx + 20, vy + 8, "STANDBY", v_white, qtrue);
-			SCR_DrawBigStringColor(10, 10, va("VOIP IDLE %.2f", clc.voipPower), v_white, qtrue);
-		}
-		
-		// Level bar background
-		SCR_FillRect(vx + 5, vy + 32, 130, 18, v_levelBg);
-		
-		float v_power = clc.voipPower;
-		if (v_power > 1.0f) v_power = 1.0f;
-		if (v_power < 0.0f) v_power = 0.0f;
-		
-		// Level bar color
-		vec4_t v_levelColor = {0.2f, 0.8f, 0.2f, 1.0f};
-		if (v_power > 0.8f) { 
-			v_levelColor[0] = 1.0f; v_levelColor[1] = 0.2f; v_levelColor[2] = 0.2f; 
-		} else if (v_power > 0.5f) { 
-			v_levelColor[0] = 0.8f; v_levelColor[1] = 0.8f; v_levelColor[2] = 0.2f; 
-		}
-		
-		// Level bar fill
-		SCR_FillRect(vx + 7, vy + 34, (int)(126 * v_power), 14, v_levelColor);
-	}
-#endif
 }
 
 /*

@@ -370,6 +370,7 @@ extern "C" {
         qhandle_t     objectivesBackShader;
         qhandle_t     checkedBoxShader;
         qhandle_t     uncheckedBoxShader;
+        qhandle_t     voipIconShader;
     } media_t;
 
     // The client game static (cgs) structure hold everything
@@ -504,6 +505,7 @@ extern "C" {
     extern cvar_t *vm_offset_upvel;
     extern cvar_t *vm_lean_lower;
     extern cvar_t *voiceChat;
+    extern cvar_t *cg_voipSend;
     extern cvar_t *cg_shadowscount;
     extern cvar_t *cg_shadowdebug;
     extern cvar_t *ui_timemessage;

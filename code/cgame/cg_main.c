@@ -111,6 +111,7 @@ cvar_t *voiceChat;
 cvar_t *cg_shadowscount;
 cvar_t *cg_shadowdebug;
 cvar_t *ui_timemessage;
+cvar_t *cg_voipSend;
 
 //
 // Added in OPM
@@ -203,6 +204,7 @@ void CG_RegisterCvars(void)
     vm_offset_upvel               = cgi.Cvar_Get("vm_offset_upvel", "0.0025", 0);
     vm_lean_lower                 = cgi.Cvar_Get("vm_lean_lower", "0.1", 0);
     voiceChat                     = cgi.Cvar_Get("cg_voicechat", "1", 0);
+    cg_voipSend                   = cgi.Cvar_Get("cl_voipSend", "0", 0);
 
     ui_timemessage = cgi.Cvar_Get("ui_timemessage", "", 0);
 
@@ -586,6 +588,7 @@ void CG_PrepRefresh(void)
     cgs.media.objectivesBackShader     = cgi.R_RegisterShaderNoMip("textures/hud/objectives_backdrop");
     cgs.media.checkedBoxShader         = cgi.R_RegisterShaderNoMip("textures/objectives/filledbox");
     cgs.media.uncheckedBoxShader       = cgi.R_RegisterShaderNoMip("textures/objectives/emptybox");
+    cgs.media.voipIconShader           = cgi.R_RegisterShaderNoMip("gfx/2d/voip_active");
 
     // go through all the configstrings and process them
     for (i = CS_SYSTEMINFO + 1; i < MAX_CONFIGSTRINGS; i++) {
