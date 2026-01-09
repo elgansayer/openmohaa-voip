@@ -1,5 +1,5 @@
 set(PROJECT_NAME openmohaa)
-set(PROJECT_VERSION 0.83.0)
+set(PROJECT_VERSION 0.84.0)
 set(PRODUCT_VERSION_STAGE "alpha")
 
 set(SERVER_NAME omohaaded)
