@@ -179,6 +179,8 @@ If you have issues, executing `set g_navigation_legacy 1` command and then reloa
 
 #### Client
 
+- Added `cl_voipLoopback` cvar to test VoIP by hearing your own voice.
+- Fix VoIP audio playback issue where `voipGain` was resetting to 0 (muted) on connection.
 - Fix bullet impacts having multiple effects sometimes.
 - Fix cinematic not stopping on map change.
 - Fix delayed SFX (such as smoke sound) being played on unrelated entities

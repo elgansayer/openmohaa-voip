@@ -291,6 +291,7 @@ extern	clientConnection_t clc;
 
 #ifdef USE_VOIP
 extern cvar_t *cl_voip;
+extern cvar_t *cl_voipLoopback;
 extern cvar_t *voip_bitrate;
 #endif
 

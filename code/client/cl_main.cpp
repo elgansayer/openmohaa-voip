@@ -135,6 +135,7 @@ clientConnection_t	clc;
 #ifdef USE_VOIP
 cvar_t *cl_voip = NULL;
 cvar_t *voip_bitrate = NULL;
+cvar_t *cl_voipLoopback = NULL;
 #endif
 clientStatic_t		cls;
 clientGameExport_t	*cge;
@@ -1023,6 +1024,11 @@ void CL_Disconnect() {
 
 	// wipe the client connection
 	Com_Memset( &clc, 0, sizeof( clientConnection_t ) );
+
+#ifdef USE_VOIP
+	for(int i = 0; i < MAX_CLIENTS; i++)
+		clc.voipGain[i] = 1.0f;
+#endif
 
 	clc.state = CA_DISCONNECTED;
 
@@ -2802,10 +2808,14 @@ CL_Frame
 #ifdef USE_VOIP
 void CL_WriteVoipPacket( const byte *data, int len ) {
 	if (!data || len <= 0) return;
-	if (len > (int)sizeof(clc.voipOutgoingData) - clc.voipOutgoingDataSize) {
+	if (len + 2 > (int)sizeof(clc.voipOutgoingData) - clc.voipOutgoingDataSize) {
 		Com_Printf("VoIP: Outgoing buffer full, dropping packet\n");
 		return;
 	}
+	// FRAMING: Write Length (2 bytes, Little Endian)
+	clc.voipOutgoingData[clc.voipOutgoingDataSize++] = len & 0xFF;
+	clc.voipOutgoingData[clc.voipOutgoingDataSize++] = (len >> 8) & 0xFF;
+
 	memcpy(clc.voipOutgoingData + clc.voipOutgoingDataSize, data, len);
 	clc.voipOutgoingDataSize += len;
 	clc.voipOutgoingDataFrames++;
@@ -3852,6 +3862,7 @@ void CL_Init( void ) {
 	cl_voip = Cvar_Get("cl_voip", "1", CVAR_ARCHIVE);
     voip_bitrate = Cvar_Get("voip_bitrate", "32000", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE); // 1 = play back to self
+	cl_voipLoopback = Cvar_Get("cl_voipLoopback", "0", CVAR_ARCHIVE); // 1 = play back to self via server return
 	Cvar_Get("cl_voipProtocol", "opus", CVAR_USERINFO | CVAR_ROM);
     clc.voipEnabled = cl_voip->integer; 
 #endif
