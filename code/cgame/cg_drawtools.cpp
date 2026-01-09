@@ -399,6 +399,80 @@ void CG_DrawVoipMeter(void)
 
 /*
 ==============
+CG_DrawTalkerIndicators
+==============
+*/
+void CG_DrawTalkerIndicators(void)
+{
+    int mask;
+    cvar_t *cv;
+    float x, y;
+    int i;
+    int count = 0;
+
+    // We can't use 'cl_voipSpeakingMask' global here because this is cgame.
+    // We must fetch via trap_Cvar_VariableIntegerValue or similar, 
+    // BUT we are in C++ with shared headers usually.
+    // However, safest to fetch CVar if we can.
+    // 'cgi.Cvar_Get' or 'cgi.Cvar_VariableIntegerValue'?
+    // Looking at CG_DrawVoipMeter: if (!cg_voipSend) ...
+    // Let's use 'cvar_t' pointer lookup if possible.
+    
+    // We need to register it once?
+    // Let's just lookup every frame for now or register it in CG_Init.
+    // Actually, 'Cvar_Get' creates or finds.
+    
+    static cvar_t *cg_voipSpeakingMask = NULL;
+    if (!cg_voipSpeakingMask) {
+        cg_voipSpeakingMask = cgi.Cvar_Get("cl_voipSpeakingMask", "0", 0);
+    }
+    
+    if (!cg_voipSpeakingMask) return;
+    
+    mask = cg_voipSpeakingMask->integer;
+    if (!mask) return;
+
+    // Position: Right side of screen, middle-ish
+    x = 640 - 150; 
+    y = 200;
+
+    for (i = 0; i < 32; i++) {
+        if (mask & (1 << i)) {
+             // Client i is talking
+             const char *name = cg.clientinfo[i].name;
+             if (!name || !name[0]) continue;
+             
+             // Draw Name
+             // Need rendering function. 'CG_DrawString' or 'cgi.R_DrawString'?
+             // OpenMoHAA cgame uses 'cgi.R_Font_DrawString' or similar?
+             // Let's verify 'CG_DrawStringExt' or similar usage in this file.
+             // cg_drawtools.cpp has 'CG_DrawStringExt'.
+             
+             // Draw icon + Name
+             // Icon: 'cgs.media.voipIconShader'
+             cgi.R_SetColor( colorWhite );
+             cgi.R_DrawStretchPic( x, y, 16, 16, 0, 0, 1, 1, cgs.media.voipIconShader );
+             
+             // CG_DrawStringExt( x + 20, y, name, colorWhite, qfalse, qtrue, 8, 8, 0 );
+             // Use R_DrawString instead
+             cgi.R_SetColor( colorWhite );
+             cgi.R_DrawString(
+                cgs.media.attackerFont, 
+                cgi.LV_ConvertString(name), 
+                (x + 20) / cgs.uiHiResScale[0], 
+                y / cgs.uiHiResScale[1], 
+                -1, 
+                cgs.uiHiResScale
+             );
+             
+             y += 20;
+             count++;
+        }
+    }
+}
+
+/*
+==============
 CG_DrawIcons
 ==============
 */
@@ -407,6 +481,8 @@ void CG_DrawIcons(void)
     if (!cg_hud->integer) {
         return;
     }
+
+    // CG_DrawTalkerIndicators(); // Disabled per user request
 
     CG_DrawPauseIcon();
     CG_DrawServerLag();

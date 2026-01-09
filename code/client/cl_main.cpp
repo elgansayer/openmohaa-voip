@@ -140,6 +140,11 @@ cvar_t *cl_voipCaptureMult = NULL;
 cvar_t *cl_voipGainDuringCapture = NULL;
 cvar_t *cl_voipShowMeter = NULL;
 cvar_t *cl_voipSendTarget = NULL; // Declared here to be safe
+
+cvar_t *cl_voipSpeakingMask = NULL;
+cvar_t *cl_voipMuteMask = NULL;
+cvar_t *cl_voipUseVAD = NULL;
+cvar_t *cl_voipVADThreshold = NULL;
 #endif
 clientStatic_t		cls;
 clientGameExport_t	*cge;
@@ -2836,11 +2841,68 @@ void CL_VoipFrame(void) {
 	if (!cl_voip || !cl_voip->integer) {
 		clc.voipPower = 0;
 		Cvar_Set("s_voipLevel", "0");
+        Cvar_Set("cl_voipSpeakingMask", "0"); // Ensure mask is cleared if VoIP disabled
 		return;
 	}
 
+    // Update Speaking Mask for HUD
+    int mask = 0;
+    for (int i=0; i < MAX_CLIENTS && i < 32; i++) {
+        if (cls.realtime - clc.voipLastPacketTime[i] < 500) {
+            mask |= (1 << i);
+        }
+    }
+    // Check if *we* are talking (local client)
+    // Actually clk.voipLastPacketTime is for *incoming*.
+    // For local, we check cl.voipSend (or just VAD status). 
+    // Usually HUD shows *us* talking too.
+    // If 'clc.voipPower' > threshold? 
+    // Let's use the 'cl_voipSend' cvar or 'clc.voipFlags' if available.
+    // Assuming clientNum is cl.clientNum?
+    // For now, let's trust the Server Loopback or just rely on 'voipPower' for local meter.
+    // The mask is for *other* players.
+    
+    // Actually, local talking is usually handled by `cl_voipSend` CVar set by keypress.
+    // Add local bit?
+    // mask |= (clc.voipPower > 0.01f ? (1 << cl.clientNum) : 0);
+    // Let's stick to received packets for now.
+    
+    static int oldMask = -1;
+    if (mask != oldMask) {
+        Cvar_Set("cl_voipSpeakingMask", va("%d", mask));
+        oldMask = mask;
+    }
+
+    // Update Mute Mask for Scoreboard
+    int muteMask = 0;
+    for (int i=0; i < MAX_CLIENTS && i < 32; i++) {
+        if (clc.voipIgnore[i]) {
+            muteMask |= (1 << i);
+        }
+    }
+    static int oldMuteMask = -1;
+    if (muteMask != oldMuteMask) {
+        Cvar_Set("cl_voipMuteMask", va("%d", muteMask));
+        oldMuteMask = muteMask;
+    }
+
 	cvar_t *cl_voipSend = Cvar_Get("cl_voipSend", "0", 0);
-	bool capturing = (cl_voipSend && cl_voipSend->integer && clc.state >= CA_CONNECTED);
+    // VAD Variables
+    static int vadHangoverTime = 0;
+    qboolean vadActive = qfalse;
+    
+    if (cl_voipUseVAD && cl_voipUseVAD->integer) {
+        // If power > threshold, extend hangover
+        // Note: clc.voipPower is smoothed, might want instantaneous for trigger
+        if (clc.voipPower > cl_voipVADThreshold->value) {
+            vadHangoverTime = cls.realtime + 500; // 500ms hangover
+        }
+        if (cls.realtime < vadHangoverTime) {
+            vadActive = qtrue;
+        }
+    }
+
+	bool capturing = ((cl_voipSend && cl_voipSend->integer) || vadActive) && (clc.state >= CA_CONNECTED);
 
 	// Update targets and flags based on send target cvar
 	cvar_t *targetCvar = Cvar_Get("cl_voipSendTarget", "spatial", 0);
@@ -3871,6 +3933,10 @@ void CL_Init( void ) {
     cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
     cl_voipShowMeter = Cvar_Get("cl_voipShowMeter", "0", CVAR_ARCHIVE);
     cl_voipSendTarget = Cvar_Get("cl_voipSendTarget", "spatial", CVAR_ARCHIVE);
+    cl_voipSpeakingMask = Cvar_Get("cl_voipSpeakingMask", "0", CVAR_ROM);
+    cl_voipMuteMask = Cvar_Get("cl_voipMuteMask", "0", CVAR_ROM);
+    cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "0", CVAR_ARCHIVE);
+    cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipProtocol", "opus", CVAR_USERINFO | CVAR_ROM);
     clc.voipEnabled = cl_voip->integer; 
 #endif

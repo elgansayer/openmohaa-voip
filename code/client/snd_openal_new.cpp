@@ -20,6 +20,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 ===========================================================================
 */
 
+#include <math.h>
 #include "snd_local.h"
 #include "snd_openal_new.h"
 #include "client.h"
@@ -2499,6 +2500,10 @@ void S_OPENAL_Update()
 {
     int             i;
     openal_channel *pChannel;
+
+    // Update VoIP Spatial Positions
+    void S_OPENAL_UpdateVoipPositions(); // Forward decl
+    S_OPENAL_UpdateVoipPositions();
 
     if (cl.snap.ps.stats[STAT_CINEMATIC]) {
         S_SetGlobalAmbientVolumeLevel(0.5f);
@@ -5044,6 +5049,49 @@ unsigned int openal_channel_two_d_stream::getBitsPerSample() const
     return bits * channels;
 }
 
+
+
+// Global/Shared tracking for VoIP
+static ALuint voipSources[MAX_CLIENTS];
+static qboolean voipInited = qfalse;
+
+void S_OPENAL_UpdateVoipPositions()
+{
+    if (!voipInited) return;
+
+    vec3_t listenerOrigin;
+    vec3_t alvec;
+    qalGetListenerfv(AL_POSITION, alvec);
+    VectorCopy(alvec, listenerOrigin);
+
+    for (int i = 0; i < MAX_CLIENTS; i++) {
+        if (!qalIsSource(voipSources[i])) continue;
+
+        // s_entity[i] corresponds to client number i? usually yes in Q3
+        // BUT we need to check if the entity is valid/active
+        
+        // Quake 3: Client numbers 0 to MAX_CLIENTS-1 map to entity numbers 0 to MAX_CLIENTS-1
+        // We use s_entity[i].position
+        
+        if (VectorLength(s_entity[i].position) == 0.0f) {
+             // If entity position is 0,0,0 it might be invalid or local player
+             // If local player, do relative
+             continue; // or set relative?
+        }
+        
+        // Update Position
+        qalSource3f(voipSources[i], AL_POSITION, 
+            s_entity[i].position[0], s_entity[i].position[1], s_entity[i].position[2]);
+            
+        // Update Velocity
+        qalSource3f(voipSources[i], AL_VELOCITY, 
+            s_entity[i].velocity[0], s_entity[i].velocity[1], s_entity[i].velocity[2]);
+            
+        // Ensure not Relative (unless it's us? Loopback handled elsewhere)
+        // qalSourcei(voipSources[i], AL_SOURCE_RELATIVE, AL_FALSE); // Already set in RawSamples
+    }
+}
+
 /*
 ==============
 S_OPENAL_RawSamples
@@ -5051,10 +5099,8 @@ S_OPENAL_RawSamples
 */
 void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int channels, const byte *data, float volume, int entityNum)
 {
-	static ALuint voipBuffers[MAX_CLIENTS][16];
+	static ALuint voipBuffers[MAX_CLIENTS][16]; // Keep buffers local for now or move out too? Buffers are fine.
 	static int voipBufferIndex[MAX_CLIENTS];
-	static ALuint voipSources[MAX_CLIENTS];
-	static qboolean voipInited = qfalse;
 	
 	// 1-based stream ID from CL_PlayVoip
 	int clientNum = stream - 1; 
@@ -5112,20 +5158,23 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	// Create and fill new buffer
 	qalGenBuffers(1, &buffer);
 
-    // FUCK ME OPTION: Manually boost the PCM samples
-    // OpenAL AL_GAIN often doesn't boost beyond 1.0 effectively on some drivers.
+    // Soft-Knee Limiter (Volume Polish)
+    // Replaces the "Nuclear Option" with a smooth tanh curve to prevent distortion.
     if (width == 2) { 
         // 16-bit audio
         short *pcm = (short *)alloca(samples * channels * 2);
         const short *src = (const short *)data;
         int count = samples * channels;
-        float pcm_boost = 16.0f; // MASSIVE boost
+        float pcm_boost = 16.0f; // Input gain
         
         for (int i=0; i<count; i++) {
-            int val = (int)(src[i] * pcm_boost);
-            if (val > 32767) val = 32767;
-            if (val < -32768) val = -32768;
-            pcm[i] = (short)val;
+            float input = (float)src[i];
+            float boosted = input * pcm_boost;
+            // Soft clip: limit * tanh( input / limit )
+            // Ensures output never exceeds 32767 but approaches it smoothly
+            float limited = 32767.0f * tanhf( boosted / 32767.0f );
+            
+            pcm[i] = (short)limited;
         }
         qalBufferData(buffer, format, pcm, samples * width * channels, rate);
     } else {
@@ -5133,18 +5182,22 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
         qalBufferData(buffer, format, data, samples * width * channels, rate);
     }
 
-	// Enforce Head-Relative (Non-Spatial) playback for now to guarantee audibility
-	qalSourcei(voipSources[clientNum], AL_SOURCE_RELATIVE, AL_TRUE);
-	qalSource3f(voipSources[clientNum], AL_POSITION, 0, 0, 0);
+    // Enforce Spatial Playback
+    qalSourcei(voipSources[clientNum], AL_SOURCE_RELATIVE, AL_FALSE);
+    qalSourcef(voipSources[clientNum], AL_ROLLOFF_FACTOR, 1.0f); 
+    qalSourcef(voipSources[clientNum], AL_REFERENCE_DISTANCE, 200.0f); // Audibility start (2m)
+    qalSourcef(voipSources[clientNum], AL_MAX_DISTANCE, 2000.0f);     // Audibility end (20m)
+    // Position is updated in S_OPENAL_UpdateVoipPositions, but init here
+    // qalSource3f(voipSources[clientNum], AL_POSITION, 0, 0, 0);
 
-	// Queue and play
-	qalSourceQueueBuffers(voipSources[clientNum], 1, &buffer);
+    // Queue and play
+    qalSourceQueueBuffers(voipSources[clientNum], 1, &buffer);
 
-	qalGetSourcei(voipSources[clientNum], AL_SOURCE_STATE, &state);
-	if (state != AL_PLAYING) {
-		qalSourcePlay(voipSources[clientNum]);
-	}
-	
-	// Debug: Confirm audio backend is alive
-	Com_Printf("S_AL: Playing VoIP Stream %d (ClientNum %d)\n", stream, clientNum);
+    qalGetSourcei(voipSources[clientNum], AL_SOURCE_STATE, &state);
+    if (state != AL_PLAYING) {
+        qalSourcePlay(voipSources[clientNum]);
+    }
+    
+    // Debug: Confirm audio backend is alive
+    // Com_Printf("S_AL: Playing VoIP Stream %d (ClientNum %d)\n", stream, clientNum);
 }

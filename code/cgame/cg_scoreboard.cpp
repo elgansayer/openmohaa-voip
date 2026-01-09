@@ -85,26 +85,31 @@ const char *CG_GetColumnName_ver_15(int iColumnNum, int *iColumnWidth)
         iReturnWidth    = 24;
         pszReturnString = "#";
         break;
-    case 1:
-        iReturnWidth    = 128;
-        pszReturnString = "Name";
+    case 1: // New VoIP Column
+        iReturnWidth    = 24;
+        pszReturnString = "";
         break;
     case 2:
+        iReturnWidth    = 128; // Reduced name width slightly? or keep same? Scoreboard might overflow.
+        // Let's keep 128 for now, usually there is spare room.
+        pszReturnString = "Name";
+        break;
+    case 3:
         iReturnWidth    = 64;
         pszReturnString = "Kills";
         break;
-    case 3:
+    case 4:
         iReturnWidth    = 64;
         pszReturnString = "Deaths";
         if (cgs.gametype > GT_TEAM) {
             pszReturnString = "Total";
         }
         break;
-    case 4:
+    case 5:
         iReturnWidth    = 64;
         pszReturnString = "Time";
         break;
-    case 5:
+    case 6:
         iReturnWidth    = 64;
         pszReturnString = "Ping";
         break;
@@ -127,26 +132,30 @@ const char *CG_GetColumnName_ver_6(int iColumnNum, int *iColumnWidth)
     const char *pszReturnString;
 
     switch (iColumnNum) {
-    case 0:
+    case 0: // New VoIP Column
+        iReturnWidth    = 24;
+        pszReturnString = "";
+        break;
+    case 1:
         iReturnWidth    = 128;
         pszReturnString = "Name";
         break;
-    case 1:
+    case 2:
         iReturnWidth    = 64;
         pszReturnString = "Kills";
         break;
-    case 2:
+    case 3:
         iReturnWidth    = 64;
         pszReturnString = "Deaths";
         if (cgs.gametype > GT_TEAM) {
             pszReturnString = "Total";
         }
         break;
-    case 3:
+    case 4:
         iReturnWidth    = 64;
         pszReturnString = "Time";
         break;
-    case 4:
+    case 5:
         iReturnWidth    = 64;
         pszReturnString = "Ping";
         break;
@@ -405,16 +414,29 @@ void CG_ParseScores_ver_15()
             }
         }
 
+        // Prepare VoIP Icon String
+        char iconString[32] = "";
+        int speakingMask = cgi.Cvar_Get("cl_voipSpeakingMask", "0", 0)->integer;
+        int muteMask = cgi.Cvar_Get("cl_voipMuteMask", "0", 0)->integer;
+
+        if (iClientNum >= 0 && iClientNum < 32) {
+            if (muteMask & (1 << iClientNum)) {
+                Q_strncpyz(iconString, "^1X", sizeof(iconString)); // Red X for Muted
+            } else if (speakingMask & (1 << iClientNum)) {
+                Q_strncpyz(iconString, "^2*", sizeof(iconString)); // Green * for Talking
+            }
+        }
+
         cgi.UI_SetScoreBoardItem(
             i,
-            szString2,
-            szString3,
-            szString4,
-            szString5,
-            szString6,
-            szString7,
-            NULL,
-            NULL,
+            szString2, // #
+            iconString,// Status (New Column)
+            szString3, // Name
+            szString4, // Kills
+            szString5, // Deaths
+            szString6, // Time
+            szString7, // Ping
+            NULL,      // Extra
             pItemTextColor,
             pItemBackColor,
             bIsHeader
@@ -620,14 +642,27 @@ void CG_ParseScores_ver_6()
             }
         }
 
+        // Prepare VoIP Icon String
+        char iconString[32] = "";
+        int speakingMask = cgi.Cvar_Get("cl_voipSpeakingMask", "0", 0)->integer;
+        int muteMask = cgi.Cvar_Get("cl_voipMuteMask", "0", 0)->integer;
+
+        if (iClientNum >= 0 && iClientNum < 32) {
+            if (muteMask & (1 << iClientNum)) {
+                Q_strncpyz(iconString, "^1X", sizeof(iconString)); // Red X for Muted
+            } else if (speakingMask & (1 << iClientNum)) {
+                Q_strncpyz(iconString, "^2*", sizeof(iconString)); // Green * for Talking
+            }
+        }
+
         cgi.UI_SetScoreBoardItem(
             i,
+            iconString,
             szString2,
             szString3,
             szString4,
             szString5,
             szString6,
-            NULL,
             NULL,
             NULL,
             pItemTextColor,

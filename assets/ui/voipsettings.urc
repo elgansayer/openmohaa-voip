@@ -149,6 +149,43 @@ resource Label {
     font "verdana-12"
     title "Loopback Test (Echo):"
 }
+
+// ----------------------------------------------------
+// Voice Activation (VAD)
+// ----------------------------------------------------
+resource Label {
+    name "vad_enable_label"
+    rect 10 200 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Voice Activation:"
+}
+resource CheckBox {
+    name "vad_invoke_checkbox"
+    rect 200 200 20 20
+    linkcvar "cl_voipUseVAD"
+    font "verdana-12"
+}
+resource Label {
+    name "vad_thresh_label"
+    rect 10 225 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "VAD Threshold:"
+}
+resource Slider {
+    name "vad_thresh_slider"
+    rect 200 225 140 18
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    min 0.0
+    max 0.5
+    linkcvar "cl_voipVADThreshold"
+}
+
+// ----------------------------------------------------
+// Loopback
+// ----------------------------------------------------
 resource CheckBox {
     name "voip_echo_checkbox"
     rect 200 245 20 20
