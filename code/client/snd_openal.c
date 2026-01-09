@@ -1462,8 +1462,20 @@ void S_AL_SrcUpdate( void )
 			continue;
 
 		// Update source parameters
-		if((s_alGain->modified) || (s_volume->modified))
-			curSource->curGain = s_alGain->value * s_volume->value;
+        {
+            float ducking = 1.0f;
+            static cvar_t *cl_voipCapturing = NULL;
+            static cvar_t *cl_voipGainDuringCapture = NULL;
+            if (!cl_voipCapturing) cl_voipCapturing = Cvar_Get("cl_voipCapturing", "0", 0);
+            if (!cl_voipGainDuringCapture) cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", 0);
+
+            if (cl_voipCapturing->integer) {
+                ducking = cl_voipGainDuringCapture->value;
+            }
+
+            if((s_alGain->modified) || (s_volume->modified) || (cl_voipCapturing->modified))
+                curSource->curGain = s_alGain->value * s_volume->value * ducking;
+        }
 		if((s_alRolloff->modified) && (!curSource->local))
 			qalSourcef(curSource->alSource, AL_ROLLOFF_FACTOR, s_alRolloff->value);
 		if(s_alMinDistance->modified)

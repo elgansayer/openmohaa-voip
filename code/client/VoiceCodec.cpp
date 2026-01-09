@@ -40,7 +40,7 @@ bool VoiceCodec::Init() {
 	// Set expected packet loss percentage (10%)
 	opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(10));
 	
-	Com_Printf("VoiceCodec: Initialized with FEC enabled (10%% packet loss tolerance)\n");
+	Com_Printf("VoiceCodec: Initialised with FEC enabled (10%% packet loss tolerance)\n");
 	
 	initialized = true;
 	return true;

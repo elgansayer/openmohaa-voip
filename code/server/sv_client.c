@@ -1646,6 +1646,24 @@ static void SV_UpdateUserinfo_f( client_t *cl ) {
 	SV_UserinfoChanged( cl );
 	// call prog code to allow overrides
 	ge->ClientUserinfoChanged( ( gentity_t * )SV_GentityNum( cl - svs.clients ), cl->userinfo );
+
+    /* Parse 'cl_voipSendTarget' from userinfo *once* -> O(1) Cache */
+    {
+        char *targetStr = Info_ValueForKey(cl->userinfo, "cl_voipSendTarget");
+        if (!Q_stricmp(targetStr, "crosshair")) {
+            cl->voipTargetMode = VOIP_TARGET_CROSSHAIR;
+        } else if (!Q_stricmp(targetStr, "attacker")) {
+            cl->voipTargetMode = VOIP_TARGET_ATTACKER;
+        } else if (!Q_stricmp(targetStr, "team")) {
+            cl->voipTargetMode = VOIP_TARGET_TEAM;
+        } else if (!Q_stricmp(targetStr, "all") || !Q_stricmp(targetStr, "global")) {
+            cl->voipTargetMode = VOIP_TARGET_ALL;
+        } else if (!Q_stricmp(targetStr, "none") || !Q_stricmp(targetStr, "off")) {
+            cl->voipTargetMode = VOIP_TARGET_NONE;
+        } else {
+            cl->voipTargetMode = VOIP_TARGET_SPATIAL;
+        }
+    }
 }
 
 

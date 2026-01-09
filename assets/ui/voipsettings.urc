@@ -65,7 +65,7 @@ resource Slider {
     name "mic_gain_slider"
     rect 160 85 200 18
     fgcolor 0.5 0.5 0.5 1
-    linkcvar "cl_voipCaptureMult"
+    linkcvar "cl_voipScale"
     min 0.0
     max 4.0
 }
@@ -100,15 +100,31 @@ resource Slider {
 }
 
 resource Label {
-    name "bitrate_label"
+    name "vol_voice_label"
     rect 10 165 150 18
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Voice Volume:"
+}
+resource Slider {
+    name "vol_voice_slider"
+    rect 160 165 200 18
+    fgcolor 0.5 0.5 0.5 1
+    linkcvar "s_volumeVoice"
+    min 0.0
+    max 2.0
+}
+
+resource Label {
+    name "bitrate_label"
+    rect 10 190 150 18
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Bitrate:"
 }
 resource Slider {
     name "bitrate_slider"
-    rect 160 165 200 18
+    rect 160 190 200 18
     fgcolor 0.5 0.5 0.5 1
     linkcvar "voip_bitrate"
     min 8000
@@ -122,7 +138,7 @@ resource Slider {
 
 resource Label {
     name "controls_title"
-    rect 10 195 460 18
+    rect 10 220 460 18
     fgcolor 1 0.8 0.2 1
     font "verdana-12"
     title "General:"
@@ -130,21 +146,21 @@ resource Label {
 
 resource Label {
     name "voip_enabled_label"
-    rect 10 220 180 20
+    rect 10 245 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Enable VoIP:"
 }
 resource CheckBox {
     name "voip_enabled_checkbox"
-    rect 200 220 20 20
+    rect 200 245 20 20
     linkcvar "cl_voip"
     font "verdana-12"
 }
 
 resource Label {
     name "voip_echo_label"
-    rect 10 245 180 20
+    rect 10 270 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Loopback Test (Echo):"
@@ -155,27 +171,27 @@ resource Label {
 // ----------------------------------------------------
 resource Label {
     name "vad_enable_label"
-    rect 10 200 180 20
+    rect 10 225 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Voice Activation:"
 }
 resource CheckBox {
     name "vad_invoke_checkbox"
-    rect 200 200 20 20
+    rect 200 225 20 20
     linkcvar "cl_voipUseVAD"
     font "verdana-12"
 }
 resource Label {
     name "vad_thresh_label"
-    rect 10 225 180 20
+    rect 10 250 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "VAD Threshold:"
 }
 resource Slider {
     name "vad_thresh_slider"
-    rect 200 225 140 18
+    rect 200 250 140 18
     fgcolor 1 1 1 1
     font "verdana-12"
     min 0.0
@@ -188,21 +204,21 @@ resource Slider {
 // ----------------------------------------------------
 resource CheckBox {
     name "voip_echo_checkbox"
-    rect 200 245 20 20
+    rect 200 270 20 20
     linkcvar "cl_voipEcho"
     font "verdana-12"
 }
 
 resource Label {
     name "voip_netloop_label"
-    rect 10 270 180 20
+    rect 10 295 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Network Loopback:"
 }
 resource CheckBox {
     name "voip_netloop_checkbox"
-    rect 200 270 20 20
+    rect 200 295 20 20
     linkcvar "cl_voipLoopback"
     font "verdana-12"
 }
@@ -212,21 +228,21 @@ resource CheckBox {
 // ----------------------------------------------------
 resource Label {
     name "voip_target_label"
-    rect 10 320 180 20
+    rect 10 345 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Send Target:"
 }
 resource Label {
     name "voip_target_value"
-    rect 200 320 100 20
+    rect 200 345 100 20
     fgcolor 0.7 0.9 1.0 1
     font "verdana-12"
     linkcvar "cl_voipSendTarget"
 }
 resource Button {
     name "voip_target_cycle"
-    rect 310 320 80 20
+    rect 310 345 80 20
     font "verdana-12"
     title "Cycle"
     stuffcommand "vstr next_target"

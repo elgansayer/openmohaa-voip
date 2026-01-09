@@ -841,16 +841,18 @@ Play raw data
 
 static void CL_PlayVoip(int sender, int samplecnt, const byte *data, int flags)
 {
+	float volume = clc.voipGain[sender] * Cvar_VariableValue("s_volumeVoice");
+
 	if(flags & VOIP_DIRECT)
 	{
 		S_RawSamples(sender + 1, samplecnt, VOIP_SAMPLE_RATE, 2, 1,
-	             data, clc.voipGain[sender], -1);
+	             data, volume, -1);
 	}
 
 	if(flags & VOIP_SPATIAL)
 	{
 		S_RawSamples(sender + MAX_CLIENTS + 1, samplecnt, VOIP_SAMPLE_RATE, 2, 1,
-	             data, clc.voipGain[sender], sender);
+	             data, volume, sender);
 	}
 }
 

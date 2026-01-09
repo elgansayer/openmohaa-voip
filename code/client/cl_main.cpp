@@ -137,7 +137,7 @@ cvar_t *cl_voip = NULL;
 cvar_t *cl_voipSend = NULL;
 cvar_t *voip_bitrate = NULL;
 cvar_t *cl_voipLoopback = NULL;
-cvar_t *cl_voipCaptureMult = NULL;
+cvar_t *cl_voipScale = NULL; // formerly cl_voipCaptureMult
 cvar_t *cl_voipGainDuringCapture = NULL;
 cvar_t *cl_voipShowMeter = NULL;
 cvar_t *cl_voipSendTarget = NULL; // Declared here to be safe
@@ -2866,7 +2866,7 @@ void CL_VoipFrame(void) {
     // If 'clc.voipPower' > threshold? 
     // Let's use the 'cl_voipSend' cvar or 'clc.voipFlags' if available.
     // Assuming clientNum is cl.clientNum?
-    // For now, let's trust the Server Loopback or just rely on 'voipPower' for local meter.
+    // For now, let's trust the Server Loopback or just rely on 'voipPower' for local metre.
     // The mask is for *other* players.
     
     // Actually, local talking is usually handled by `cl_voipSend` CVar set by keypress.
@@ -2899,7 +2899,10 @@ void CL_VoipFrame(void) {
     // static cvar_t *cl_voipVADThreshold = NULL;
     if (!cl_voipUseVAD) {
         cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "1", CVAR_ARCHIVE);
-        cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE); // Lowered from 0.25 for better sensitivity
+        cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE);
+        cl_voipScale = Cvar_Get("cl_voipScale", "1.0", CVAR_ARCHIVE);
+        cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
+        s_volumeVoice = Cvar_Get("s_volumeVoice", "1.0", CVAR_ARCHIVE);
     }
     
     static int vadHangoverTime = 0;
@@ -2917,6 +2920,9 @@ void CL_VoipFrame(void) {
     }
 
 	bool capturing = ((cl_voipSend && cl_voipSend->integer) || vadActive) && (clc.state >= CA_CONNECTED);
+    
+    // Publish capturing state for Sound System to use for Ducking
+    Cvar_Set("cl_voipCapturing", capturing ? "1" : "0");
 	
 	// IMPORTANT: Add/remove local player to/from speaking mask when capturing state changes
 	// This makes the mic icon and head icon show for the local player
@@ -2964,10 +2970,10 @@ void CL_VoipFrame(void) {
 	}
 
 	// VoIP icon is shown via HUD (cl_voipSpeakingMask triggers it)
-	// No need to show the meter menu
+	// No need to show the metre menu
 	// User wants the same icon as +voiprecord, which is handled by the speaking mask
 
-	// Always start capture if VoIP is enabled, so the meter works
+	// Always start capture if VoIP is enabled, so the metre works
 	S_StartCapture();
 	
 	int available = S_AvailableCaptureSamples();
@@ -2987,8 +2993,8 @@ void CL_VoipFrame(void) {
 		}
 
 		if (pcmBufferCount >= FRAME_SIZE) {
-			// Apply Capture Multiplier
-			float captureMult = cl_voipCaptureMult ? cl_voipCaptureMult->value : 1.0f;
+			// Apply Capture Multiplier (Pre-amp)
+			float captureMult = cl_voipScale->value;
 			if (captureMult != 1.0f) {
 				int j;
 				for (j = 0; j < FRAME_SIZE; j++) {
@@ -3011,7 +3017,7 @@ void CL_VoipFrame(void) {
 			clc.voipPower = (clc.voipPower * 0.7f) + (currentPower * 0.3f);
 			if (clc.voipPower > 1.0f) clc.voipPower = 1.0f;
 
-			// Also update the cvar if we are connected or in a menu (for the meter)
+			// Also update the cvar if we are connected or in a menu (for the metre)
 			// Actually the cvar is updated inside S_Capture now too, but we can enforce it here if needed.
 			// But wait, if S_Capture already updates it, we don't need to do it here.
 
@@ -3071,7 +3077,7 @@ void CL_VoipFrame(void) {
 
 	// take a breal, think about it
 	if (!capturing && !UI_MenuActive()) {
-		// Keep capture running so the HUD meter works even when not transmitting (for testing mic).
+		// Keep capture running so the HUD metre works even when not transmitting (for testing mic).
 		// S_StopCapture(); 
 	}
 }
