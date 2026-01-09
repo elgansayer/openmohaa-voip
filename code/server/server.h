@@ -210,6 +210,7 @@ typedef struct client_s {
 	int queuedVoipPackets;
 	int queuedVoipIndex;
 	int voipTalkEnd;  // svs.time when talking should end (set on each VoIP packet)
+	int voipTargetMode; // VOIP_TARGET_SPATIAL, VOIP_TARGET_CROSSHAIR, etc.
 #endif
 
 	int				oldServerTime;
@@ -258,6 +259,13 @@ typedef enum {
 	NETO_CULLED,
 	NETO_ALWAYS
 } netoptimize_e;
+
+#define VOIP_TARGET_SPATIAL 0
+#define VOIP_TARGET_CROSSHAIR 1
+#define VOIP_TARGET_TEAM 2
+#define VOIP_TARGET_ATTACKER 3
+#define VOIP_TARGET_ALL 4
+#define VOIP_TARGET_NONE 5
 
 typedef struct {
 	netadr_t	adr;

@@ -2829,10 +2829,16 @@ void CL_WriteVoipPacket( const byte *data, int len ) {
 	memcpy(clc.voipOutgoingData + clc.voipOutgoingDataSize, data, len);
 	clc.voipOutgoingDataSize += len;
 	clc.voipOutgoingDataFrames++;
+    
+    // If this is the first frame in a new bundle, set the flush timer.
+    // 60ms is sufficient for 2-3 frames of Opus.
+    if (clc.voipOutgoingDataFrames == 1) {
+        clc.voipFlushTime = cls.realtime + 60;
+    }
 	
 	static int lastLog = 0;
 	if (cls.realtime - lastLog > 2000) {
-		Com_Printf("VoIP CLIENT: Buffered %d bytes, total buffered=%d, frames=%d\n", 
+		Com_DPrintf("VoIP CLIENT: Buffered %d bytes, total buffered=%d, frames=%d\n", 
 			len, clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
 		lastLog = cls.realtime;
 	}

@@ -1995,8 +1995,10 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 	generation = MSG_ReadByte(msg);
 	sequence = MSG_ReadLong(msg);
 	frames = MSG_ReadByte(msg);
-	MSG_ReadData(msg, recips, sizeof(recips));
-	flags = MSG_ReadByte(msg);
+    /* REDUNDANT: Targets and Flags are no longer sent by client */
+	/* MSG_ReadData(msg, recips, sizeof(recips)); */
+	/* flags = MSG_ReadByte(msg); */
+    flags = 0; 
 	packetsize = MSG_ReadShort(msg);
 
 	if (msg->readcount > msg->cursize)
@@ -2019,11 +2021,11 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 	if (ignoreData || SV_ShouldIgnoreVoipSender(cl))
 		return;   // Blacklisted, disabled, etc.
 
-	// Set voipTalkEnd timestamp - talking flag will be set for 500ms after last packet
+	/* Set voipTalkEnd timestamp - talking flag will be set for 500ms after last packet */
 	cl->voipTalkEnd = svs.time + 500;
 
-	// Set EF_PLAYER_TALKING flag on the sender's entity
-	// This makes the talking icon appear above their head for other players
+	/* Set EF_PLAYER_TALKING flag on the sender's entity
+	   This makes the talking icon appear above their head for other players */
 	{
 		gentity_t *ent = SV_GentityNum(sender);
 		if (ent) {
@@ -2031,83 +2033,87 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		}
 	}
 
-	// Check bounds
+	/* Check bounds */
 	if ( (msg->readcount + packetsize) > msg->cursize ) {
 		return;
 	}
 
-	// We only support Opus. The packet contains raw Opus frames.
-	// Since we don't have a codec header, we assume it's valid Opus or the decoder will just fail/skip it.
+	/* We only support Opus. The packet contains raw Opus frames.
+	   Since we don't have a codec header, we assume it's valid Opus or the decoder will just fail/skip it. */
 	
-	// Parse 'cl_voipSendTarget' from userinfo *once*
-	char sendTarget[MAX_CVAR_VALUE_STRING];
-	Q_strncpyz(sendTarget, Info_ValueForKey(cl->userinfo, "cl_voipSendTarget"), sizeof(sendTarget));
+	/* Parse 'cl_voipSendTarget' from userinfo *once* */
+	/* OPTIMIZATION: Use cached enum from SV_UpdateUserinfo_f */
+	int targetMode = cl->voipTargetMode;
 	
 	int crosshairTargetNum = -1;
-	qboolean isCrosshair = !Q_stricmp(sendTarget, "crosshair");
-	qboolean isAttacker = !Q_stricmp(sendTarget, "attacker");
-	qboolean isTeam = !Q_stricmp(sendTarget, "team") || Info_ValueForKey(cl->userinfo, "cl_voipTeamOnly")[0] == '1';
-
-	// Pre-calculate Crosshair Target
-	if (isCrosshair) {
+	
+	/* Pre-calculate Crosshair Target */
+	if (targetMode == VOIP_TARGET_CROSSHAIR) {
 		trace_t tr;
 		vec3_t start, end, forward;
 		
 		VectorCopy(cl->gentity->client->ps.origin, start);
 		start[2] += cl->gentity->client->ps.viewheight;
 		AngleVectors(cl->gentity->client->ps.viewangles, forward, NULL, NULL);
-		VectorMA(start, 8192, forward, end);
+		VectorMA(start, MAX_MAP_BOUNDS, forward, end); /* Use constant instead of magic number */
 		SV_Trace(&tr, start, NULL, NULL, end, sender, MASK_SHOT, qfalse, qfalse);
 		
 		crosshairTargetNum = tr.entityNum;
 	}
 
-	// decide who needs this VoIP packet sent to them...
+	/* decide who needs this VoIP packet sent to them... */
 	for (i = 0, client = svs.clients; i < sv_maxclients->integer ; i++, client++) {
 		
 		if (client->state != CS_ACTIVE) {
 			continue;
 		}
 
-		// 1. Crosshair Targeting
-		if (isCrosshair) {
+		/* 1. Crosshair Targeting */
+		if (targetMode == VOIP_TARGET_CROSSHAIR) {
 			if (crosshairTargetNum != i) {
-				continue; // Skip if not the target
+				continue; /* Skip if not the target */
 			}
 		}
-		// 2. Attacker Targeting
-		else if (isAttacker) {
-			// FIXME: Disabled
-			/*
-			int attackerNum = cl->gentity->client->ps.persistant[PERS_ATTACKER];
-			if (attackerNum < 0 || attackerNum >= sv_maxclients->integer || attackerNum != i) {
-				continue;
-			}
-			*/
+		/* 2. Attacker Targeting */
+		else if (targetMode == VOIP_TARGET_ATTACKER) {
+            /* FIXME: Attacker tracking not supported in current game module */
+            continue;
 		}
-		// 3. Team Targeting
-		else if (isTeam) {
-            // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
-            // Access team via playerState_t which is visible to engine
-            // NOTE: svs.clients[i].gentity is the gentity
+		/* 3. Team Targeting */
+		else if (targetMode == VOIP_TARGET_TEAM) {
+            /* Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
+               Access team via playerState_t which is visible to engine
+               NOTE: svs.clients[i].gentity is the gentity */
             gentity_t *senderEnt = cl->gentity;
             gentity_t *destEnt = client->gentity;
 
             if (senderEnt && destEnt && senderEnt->client && destEnt->client) {
-                // Use ps.stats[STAT_TEAM] or ps.persistant[PERS_TEAM]
-                // PERS_TEAM seems more reliable for persistent team state
+                /* Use ps.stats[STAT_TEAM] or ps.persistant[PERS_TEAM]
+                   PERS_TEAM seems more reliable for persistent team state */
                 int senderTeam = senderEnt->client->ps.stats[STAT_TEAM];
                 int destTeam = destEnt->client->ps.stats[STAT_TEAM];
 
                 if (senderTeam == TEAM_SPECTATOR) {
-                     // Spectators can talk to everyone
+                     /* Spectators can talk to everyone */
                 } else if (senderTeam != destTeam) {
                     continue; 
                 }
             }
 		}
+		/* 4. Spatial (Default) - Standard distance check */
+		else if (targetMode == VOIP_TARGET_SPATIAL) {
+			flags |= (VOIP_SPATIAL | VOIP_DIRECT); /* Ensure spatial processing downstream */
+		}
+		/* 5. All - Everyone hears */
+		else if (targetMode == VOIP_TARGET_ALL) {
+			flags |= VOIP_DIRECT; 
+		}
+		/* 6. None */
+		else if (targetMode == VOIP_TARGET_NONE) {
+			continue;
+		}
 
-		// Network Loopback Enabled for Testing
+		/* Network Loopback Enabled for Testing */
 		/*
 		if (i == sender) {
 			continue;
@@ -2154,7 +2160,7 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		client->voipPacket[(client->queuedVoipIndex + client->queuedVoipPackets) % ARRAY_LEN(client->voipPacket)] = packet;
 		client->queuedVoipPackets++;
 		
-		Com_Printf("SV_VoIP: Queued packet for client %d (flags=%d, queue depth=%d)\n", 
+		Com_DPrintf("SV_VoIP: Queued packet for client %d (flags=%d, queue depth=%d)\n", 
 			i, flags, client->queuedVoipPackets);
 	}
 }

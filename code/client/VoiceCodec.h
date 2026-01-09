@@ -19,6 +19,10 @@ public:
 	VoiceCodec();
 	~VoiceCodec();
 
+    // id Tech 3 Memory Overrides
+    void *operator new(size_t size) { return Z_Malloc(static_cast<int>(size)); }
+    void operator delete(void *p) { Z_Free(p); }
+
 	// Initialize the codec. Returns true on success.
 	bool Init();
 

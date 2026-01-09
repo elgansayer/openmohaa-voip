@@ -1001,8 +1001,12 @@ void CL_WritePacket( void ) {
 			int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
 			if (encapsulation <= 0) encapsulation = 1;
 
+			// Check for flush timeout
+            qboolean forceFlush = (cls.realtime > clc.voipFlushTime);
+
 			// If we haven't buffered enough frames yet, and buffer isn't dangerously full, wait.
-			if (clc.voipOutgoingDataFrames < encapsulation && 
+			if (!forceFlush && 
+                clc.voipOutgoingDataFrames < encapsulation && 
 				clc.voipOutgoingDataSize < sizeof(clc.voipOutgoingData) - 200) {
 				// Keep buffering
 			} else {
@@ -1012,8 +1016,9 @@ void CL_WritePacket( void ) {
 				MSG_WriteByte (&buf, clc.voipOutgoingGeneration);
 				MSG_WriteLong (&buf, clc.voipOutgoingSequence);
 				MSG_WriteByte (&buf, clc.voipOutgoingDataFrames);
-				MSG_WriteData (&buf, clc.voipTargets, sizeof(clc.voipTargets));
-				MSG_WriteByte(&buf, clc.voipFlags);
+                // REDUNDANT: Targets and Flags are calculated by Server based on cl_voipSendTarget
+                // MSG_WriteData (&buf, clc.voipTargets, sizeof(clc.voipTargets));
+				// MSG_WriteByte(&buf, clc.voipFlags);
 				MSG_WriteShort (&buf, clc.voipOutgoingDataSize);
 				MSG_WriteData (&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
 

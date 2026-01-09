@@ -276,6 +276,7 @@ typedef struct {
 	int voipOutgoingSequence;
 	byte voipOutgoingGeneration;
 	byte voipOutgoingData[1024];
+    int voipFlushTime; // timestamp to force flush
 	float voipPower;
 #endif
 
