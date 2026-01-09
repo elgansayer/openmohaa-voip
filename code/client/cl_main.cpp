@@ -3033,7 +3033,7 @@ void CL_VoipFrame(void) {
 			}
 
 			if (capturing && clc.voiceCodec) {
-				unsigned char packet[1024];
+				unsigned char packet[VOIP_MAX_PACKET_SIZE];
 				int len = clc.voiceCodec->Encode(pcmBuffer, FRAME_SIZE, packet, sizeof(packet));
 				
 				// FU DEBUG
@@ -3050,10 +3050,10 @@ void CL_VoipFrame(void) {
 					
 					// ECHO TEST - Only if enabled
 					if (Cvar_VariableIntegerValue("cl_voipEcho")) {
-						short decoded[960];
-						int samples = clc.voiceCodec->Decode(clc.clientNum, packet, len, decoded, 960, qfalse);
+						short decoded[VOIP_FRAME_SIZE];
+						int samples = clc.voiceCodec->Decode(clc.clientNum, packet, len, decoded, VOIP_FRAME_SIZE, qfalse);
 						if (samples > 0) {
-							S_RawSamples(1, samples, 48000, 2, 1, (byte*)decoded, 1.0f, -1);
+							S_RawSamples(1, samples, VOIP_SAMPLE_RATE, 2, 1, (byte*)decoded, 1.0f, -1);
 						}
 					}
 				}

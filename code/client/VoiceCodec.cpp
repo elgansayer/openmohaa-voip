@@ -4,7 +4,6 @@
 #include <opus.h>
 
 // Standard Opus settings for VoIP
-#define VOIP_SAMPLE_RATE 48000
 #define VOIP_CHANNELS 1
 #define VOIP_APPLICATION OPUS_APPLICATION_VOIP
 
@@ -33,7 +32,7 @@ bool VoiceCodec::Init() {
 	}
 
 	// Set bitrate (~32kbps)
-	opus_encoder_ctl(encoder, OPUS_SET_BITRATE(32000));
+	opus_encoder_ctl(encoder, OPUS_SET_BITRATE(VOIP_BITRATE));
 	
 	// Enable in-band FEC (Forward Error Correction)
 	opus_encoder_ctl(encoder, OPUS_SET_INBAND_FEC(1));

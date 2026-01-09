@@ -4,8 +4,15 @@
 #include "../qcommon/q_shared.h"
 
 // Forward declaration to avoid pulling in opus headers everywhere
-struct OpusEncoder;
 struct OpusDecoder;
+struct OpusEncoder;
+
+// VoIP Constants
+#define VOIP_SAMPLE_RATE 48000
+#define VOIP_FRAME_SIZE 960  // 20ms at 48kHz
+#define VOIP_BITRATE 32000
+#define VOIP_MAX_PACKET_SIZE 1024
+#define VOIP_MAX_DECODED_SAMPLES (VOIP_FRAME_SIZE)
 
 class VoiceCodec {
 public:
