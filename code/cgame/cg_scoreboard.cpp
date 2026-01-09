@@ -421,9 +421,9 @@ void CG_ParseScores_ver_15()
 
         if (iClientNum >= 0 && iClientNum < 32) {
             if (muteMask & (1 << iClientNum)) {
-                Q_strncpyz(iconString, "^1X", sizeof(iconString)); // Red X for Muted
+                Q_strncpyz(iconString, "*icon:textures/voip/muted", sizeof(iconString));
             } else if (speakingMask & (1 << iClientNum)) {
-                Q_strncpyz(iconString, "^2*", sizeof(iconString)); // Green * for Talking
+                Q_strncpyz(iconString, "*icon:textures/voip/talking", sizeof(iconString));
             }
         }
 
@@ -649,9 +649,9 @@ void CG_ParseScores_ver_6()
 
         if (iClientNum >= 0 && iClientNum < 32) {
             if (muteMask & (1 << iClientNum)) {
-                Q_strncpyz(iconString, "^1X", sizeof(iconString)); // Red X for Muted
+                Q_strncpyz(iconString, "*icon:textures/voip/muted", sizeof(iconString));
             } else if (speakingMask & (1 << iClientNum)) {
-                Q_strncpyz(iconString, "^2*", sizeof(iconString)); // Green * for Talking
+                Q_strncpyz(iconString, "*icon:textures/voip/talking", sizeof(iconString));
             }
         }
 

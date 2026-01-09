@@ -5055,6 +5055,43 @@ unsigned int openal_channel_two_d_stream::getBitsPerSample() const
 static ALuint voipSources[MAX_CLIENTS];
 static qboolean voipInited = qfalse;
 
+// VoIP AGC (Automatic Gain Control) State
+struct VoipAGC {
+	float peak;          // Current peak level
+	float gain;          // Current gain multiplier
+	float targetPeak;    // Target peak level (0.7 * 32767 = ~23000)
+	float attackCoeff;   // Attack coefficient (fast gain reduction)
+	float releaseCoeff;  // Release coefficient (slow gain increase)
+};
+
+static VoipAGC voipAGC[MAX_CLIENTS];
+static qboolean voipAGCInited = qfalse;
+
+// AGC CVars
+static cvar_t *cl_voipAGC = NULL;
+static cvar_t *cl_voipAGCTarget = NULL;
+static cvar_t *cl_voipAGCAttack = NULL;
+static cvar_t *cl_voipAGCRelease = NULL;
+
+void S_OPENAL_InitVoipAGC() {
+	// Initialize CVars
+	if (!cl_voipAGC) {
+		cl_voipAGC = Cvar_Get("cl_voipAGC", "1", CVAR_ARCHIVE);
+		cl_voipAGCTarget = Cvar_Get("cl_voipAGCTarget", "0.7", CVAR_ARCHIVE);
+		cl_voipAGCAttack = Cvar_Get("cl_voipAGCAttack", "0.1", CVAR_ARCHIVE);
+		cl_voipAGCRelease = Cvar_Get("cl_voipAGCRelease", "0.01", CVAR_ARCHIVE);
+	}
+	
+	for (int i = 0; i < MAX_CLIENTS; i++) {
+		voipAGC[i].peak = 0.0f;
+		voipAGC[i].gain = 1.0f;
+		voipAGC[i].targetPeak = cl_voipAGCTarget->value * 32767.0f;
+		voipAGC[i].attackCoeff = cl_voipAGCAttack->value;
+		voipAGC[i].releaseCoeff = cl_voipAGCRelease->value;
+	}
+	voipAGCInited = qtrue;
+}
+
 void S_OPENAL_UpdateVoipPositions()
 {
     if (!voipInited) return;
@@ -5118,6 +5155,13 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 
 	if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
 
+	// Debug: Log sample rate on first call for each client
+	static qboolean loggedRate[MAX_CLIENTS] = {qfalse};
+	if (!loggedRate[clientNum]) {
+		Com_Printf("VoIP: Client %d - Rate: %d Hz, Width: %d, Channels: %d\n", clientNum, rate, width, channels);
+		loggedRate[clientNum] = qtrue;
+	}
+
 	// One-time init for VoIP sources
 	if (!voipInited) {
 		int i;
@@ -5158,26 +5202,61 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	// Create and fill new buffer
 	qalGenBuffers(1, &buffer);
 
-    // Soft-Knee Limiter (Volume Polish)
-    // Replaces the "Nuclear Option" with a smooth tanh curve to prevent distortion.
-    if (width == 2) { 
-        // 16-bit audio
-        short *pcm = (short *)alloca(samples * channels * 2);
-        const short *src = (const short *)data;
-        int count = samples * channels;
-        float pcm_boost = 16.0f; // Input gain
-        
-        for (int i=0; i<count; i++) {
-            float input = (float)src[i];
-            float boosted = input * pcm_boost;
-            // Soft clip: limit * tanh( input / limit )
-            // Ensures output never exceeds 32767 but approaches it smoothly
-            float limited = 32767.0f * tanhf( boosted / 32767.0f );
-            
-            pcm[i] = (short)limited;
-        }
-        qalBufferData(buffer, format, pcm, samples * width * channels, rate);
-    } else {
+	// Initialize AGC if needed
+	if (!voipAGCInited) {
+		S_OPENAL_InitVoipAGC();
+	}
+
+	// AGC + Soft-Knee Limiter (Volume Polish)
+	if (width == 2) { 
+		// 16-bit audio
+		short *pcm = (short *)alloca(samples * channels * 2);
+		const short *src = (const short *)data;
+		int count = samples * channels;
+		
+		// Step 1: Calculate peak of incoming samples
+		float peak = 0.0f;
+		for (int i = 0; i < count; i++) {
+			float sample = fabsf((float)src[i]);
+			if (sample > peak) peak = sample;
+		}
+		
+		// Step 2: Update AGC gain
+		VoipAGC *agc = &voipAGC[clientNum];
+		agc->peak = peak;
+		
+		// Check if AGC is enabled
+		if (cl_voipAGC && cl_voipAGC->integer) {
+			if (peak > 1.0f) { // Avoid division by zero
+				float targetGain = agc->targetPeak / peak;
+				
+				if (targetGain < agc->gain) {
+					// Attack: reduce gain quickly when signal is too loud
+					agc->gain = agc->gain * (1.0f - agc->attackCoeff) + targetGain * agc->attackCoeff;
+				} else {
+					// Release: increase gain slowly when signal is quiet
+					agc->gain = agc->gain * (1.0f - agc->releaseCoeff) + targetGain * agc->releaseCoeff;
+				}
+			}
+			
+			// Clamp gain to reasonable range
+			if (agc->gain < 0.1f) agc->gain = 0.1f;
+			if (agc->gain > 10.0f) agc->gain = 10.0f;
+		} else {
+			// AGC disabled, use fixed gain
+			agc->gain = 1.0f;
+		}
+		
+		// Step 3: Apply AGC gain + soft limiter as safety net
+		for (int i = 0; i < count; i++) {
+			float input = (float)src[i] * agc->gain;
+			// Soft clip: limit * tanh(input / limit)
+			// Ensures output never exceeds 32767 but approaches it smoothly
+			float limited = 32767.0f * tanhf(input / 32767.0f);
+			pcm[i] = (short)limited;
+		}
+		qalBufferData(buffer, format, pcm, samples * width * channels, rate);
+	} else {
         // Fallback for 8-bit (unlikely for Opus but safe)
         qalBufferData(buffer, format, data, samples * width * channels, rate);
     }

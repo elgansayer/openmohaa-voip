@@ -1,53 +1,54 @@
 // VoIP Audio Input Meter
 // This menu displays a small vertical bar that responds to microphone input level
+// Shows when VAD is active OR when +voiprecord is pressed
 
-// menu "voipmeter" 64 220 NONE 1
-// bgcolor 0 0 0 0
-// fgcolor 1 1 1 1
-// align left bottom
-// 
-// //==================================================
-// // Audio Level Backdrop
-// resource
+menu "voipmeter" 64 220 NONE 1
+bgcolor 0 0 0 0
+fgcolor 1 1 1 1
+align left bottom
+
+//==================================================
+// Audio Level Backdrop
+resource
+Label
+{
+name "audiometer_bg"
+rect 16 10 16 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.2 0.2 0.2 0.5
+borderstyle "NONE"
+shader textures/hud/healthback
+}
+
+//==================================================
+// Audio Level Meter
+resource
+Label
+{
+name "audiometer"
+rect 16 10 16 64
+fgcolor 1.00 1.00 1.00 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+linkcvar "cl_voipPower"
+statbar vertical 0 1
+statbar_shader textures/hud/healthmeter
+statbar_shader_flash textures/hud/healthmeterflash
+}
+
+//==================================================
 // Label
-// {
-// name "audiometer_bg"
-// rect 16 10 16 64
-// fgcolor 1.00 1.00 1.00 1.00
-// bgcolor 0.2 0.2 0.2 0.5
-// borderstyle "NONE"
-// shader textures/hud/healthback
-// }
-// 
-// //==================================================
-// // Audio Level Meter
-// resource
-// Label
-// {
-// name "audiometer"
-// rect 16 10 16 64
-// fgcolor 1.00 1.00 1.00 1.00
-// bgcolor 0.00 0.00 0.00 0.00
-// borderstyle "NONE"
-// linkcvar "s_voipLevel"
-// statbar vertical 0 1
-// statbar_shader textures/hud/healthmeter
-// statbar_shader_flash textures/hud/healthmeterflash
-// }
-// 
-// //==================================================
-// // Label
-// resource
-// Label
-// {
-// name "mic_label"
-// title "MIC"
-// rect 8 75 32 10
-// fgcolor 0.70 0.60 0.05 1.00
-// bgcolor 0.00 0.00 0.00 0.00
-// borderstyle "NONE"
-// textalign center
-// font "verdana-12"
-// }
-// 
-// end.
+resource
+Label
+{
+name "mic_label"
+title "MIC"
+rect 8 75 32 10
+fgcolor 0.70 0.60 0.05 1.00
+bgcolor 0.00 0.00 0.00 0.00
+borderstyle "NONE"
+textalign center
+font "verdana-12"
+}
+
+end.

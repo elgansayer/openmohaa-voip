@@ -209,7 +209,138 @@ void CG_PlayerTeamIcon(refEntity_t *pModel, entityState_t *pPlayerState)
 
 /*
 ===============
+CG_PlayerVoipIcon
+===============
+*/
+void CG_PlayerVoipIcon(refEntity_t *pModel, entityState_t *pPlayerState)
+{
+    int         iClientNum;
+    int         speakingMask;
+    int         muteMask;
+    qboolean    bIsTalking;
+    qboolean    bIsMuted;
+    int         iTag;
+    float       fAlpha;
+    float       fDist;
+    vec3_t      vTmp;
+    refEntity_t iconEnt;
+    int         i;
+
+    iClientNum = pPlayerState->number;
+
+    // Allow showing icon above local player when in 3rd person
+    // (removed the early return check)
+
+    // Check VoIP status
+    speakingMask = cgi.Cvar_Get("cl_voipSpeakingMask", "0", 0)->integer;
+    muteMask     = cgi.Cvar_Get("cl_voipMuteMask", "0", 0)->integer;
+
+    if (iClientNum < 0 || iClientNum >= 32) {
+        return;
+    }
+
+    bIsTalking = (speakingMask & (1 << iClientNum)) != 0;
+    bIsMuted   = (muteMask & (1 << iClientNum)) != 0;
+
+    // Debug: Log when icon should show
+    static int lastDebug = 0;
+    if ((bIsTalking || bIsMuted) && cg.time - lastDebug > 1000) {
+        cgi.Printf("VoIP Icon: Client %d - Talking:%d Muted:%d\n", iClientNum, bIsTalking, bIsMuted);
+        lastDebug = cg.time;
+    }
+
+    if (!bIsTalking && !bIsMuted) {
+        return;
+    }
+
+    // Setup icon entity
+    memset(&iconEnt, 0, sizeof(iconEnt));
+
+    if (bIsMuted) {
+        iconEnt.hModel = cgi.R_RegisterModel("textures/voip/muted_icon.spr");
+    } else if (bIsTalking) {
+        iconEnt.hModel = cgi.R_RegisterModel("textures/voip/talking_icon.spr");
+    }
+
+    if (!iconEnt.hModel) {
+        return;
+    }
+
+    memset(vTmp, 0, sizeof(vTmp));
+    AnglesToAxis(vTmp, iconEnt.axis);
+
+    iconEnt.scale              = 0.4f;
+    
+    // Animate talking icon with pulsing effect
+    if (bIsTalking) {
+        float pulse = sinf(cg.time * 0.008f) * 0.08f; // Pulse between -0.08 and +0.08
+        iconEnt.scale += pulse;
+    }
+    
+    iconEnt.renderfx           = 0;
+    iconEnt.reType             = RT_SPRITE;
+    iconEnt.shaderTime         = 0.0f;
+    iconEnt.frameInfo[0].index = 0;
+    iconEnt.shaderRGBA[0]      = -1;
+    iconEnt.shaderRGBA[1]      = -1;
+    iconEnt.shaderRGBA[2]      = -1;
+    VectorCopy(pModel->origin, iconEnt.origin);
+
+    // Position above player's head
+    iTag = cgi.Tag_NumForName(pModel->tiki, "eyes bone");
+    if (iTag == -1) {
+        iconEnt.origin[2] = iconEnt.origin[2] + 96.0f;
+    } else {
+        orientation_t oEyes = cgi.TIKI_Orientation(pModel, iTag);
+
+        for (i = 0; i < 3; ++i) {
+            VectorMA(iconEnt.origin, oEyes.origin[i], pModel->axis[i], iconEnt.origin);
+        }
+
+        iconEnt.origin[2] = iconEnt.origin[2] + 24.0f; // Slightly above eyes
+    }
+
+    // Calculate distance-based scaling and alpha
+    VectorSubtract(iconEnt.origin, cg.refdef.vieworg, vTmp);
+    fDist = VectorLength(vTmp);
+
+    if (fDist < 256.0f) {
+        iconEnt.scale = fDist / 853.0f + 0.15f;
+    } else if (fDist > 512.0f) {
+        iconEnt.scale = (fDist - 512.0f) / 2560.0f + 0.4f;
+    }
+
+    if (iconEnt.scale > 0.8f) {
+        iconEnt.scale = 0.8f;
+    }
+
+    // Fade based on distance
+    if (fDist > 256.0) {
+        fAlpha = 1.0f;
+    } else if (fDist >= 72.0f) {
+        fAlpha = (fDist - 72.0f) / 184.0f;
+    } else {
+        fAlpha = 0.0f;
+    }
+
+    // Boost alpha for VoIP icons
+    int value = (int)((fAlpha + 0.5f) * 255.0f);
+    if (value > 255) {
+        value = 255;
+    }
+    iconEnt.shaderRGBA[3] = value;
+
+    if (fAlpha > 0.0 || bIsTalking || bIsMuted) {
+        // Offset slightly toward camera for visibility
+        VectorMA(iconEnt.origin, -1.5f, cg.refdef.viewaxis[0], iconEnt.origin);
+        cgi.R_AddRefSpriteToScene(&iconEnt);
+    }
+}
+
+/*
+===============
 CG_InterpolateAnimParms
+
 
 Interpolate between current and next entity
 ===============
@@ -1363,6 +1494,7 @@ void CG_ModelAnim(centity_t *cent, qboolean bDoShaderTime)
 
     if (cent->currentState.eType == ET_PLAYER && !(cent->currentState.eFlags & EF_DEAD)) {
         CG_PlayerTeamIcon(&model, &cent->currentState);
+        CG_PlayerVoipIcon(&model, &cent->currentState);
     }
 
     if (s1->number == cg.snap->ps.clientNum) {

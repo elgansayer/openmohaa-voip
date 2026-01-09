@@ -2019,6 +2019,15 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 	if (ignoreData || SV_ShouldIgnoreVoipSender(cl))
 		return;   // Blacklisted, disabled, etc.
 
+	// Set EF_PLAYER_TALKING flag on the sender's entity
+	// This makes the talking icon appear above their head for other players
+	{
+		gentity_t *ent = SV_GentityNum(sender);
+		if (ent) {
+			ent->s.eFlags |= EF_PLAYER_TALKING;
+		}
+	}
+
 	// !!! FIXME: see if we read past end of msg...
 
 	// !!! FIXME: reject if not opus data.

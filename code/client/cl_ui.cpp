@@ -4476,11 +4476,32 @@ ScoreboardListItem::ScoreboardListItem()
 void ScoreboardListItem::DrawListItem(int iColumn, const UIRect2D& drawRect, bool bSelected, UIFont *pFont)
 {
     DrawBox(drawRect, backColor, 1.0);
+    const char *text = getListItemString(iColumn);
+    const char *iconPrefix = "*icon:";
+
+    if (strncmp(text, iconPrefix, 6) == 0) {
+        // It's an icon
+        const char *shaderName = text + 6;
+        qhandle_t   shader     = re.RegisterShaderNoMip(shaderName);
+        if (shader) {
+            re.SetColor(NULL); // Reset color to white
+            re.DrawStretchPic(
+                drawRect.pos.x,
+                drawRect.pos.y,
+                drawRect.size.width,
+                drawRect.size.height,
+                0, 0, 1, 1,
+                shader
+            );
+        }
+        return; 
+    }
+
     pFont->setColor(textColor);
     pFont->Print(
         (drawRect.pos.x + 1) / uid.scaleRes[0],
         drawRect.pos.y / uid.scaleRes[1],
-        Sys_LV_CL_ConvertString(getListItemString(iColumn)),
+        Sys_LV_CL_ConvertString(text),
         -1,
         uid.scaleRes
     );

@@ -378,7 +378,22 @@ void CG_DrawVoipMeter(void)
 {
     float x, y, w, h;
 
-    if (!cg_voipSend || !cg_voipSend->integer) {
+    // Show meter when +voiprecord is pressed OR when local player is in speaking mask (VAD)
+    static cvar_t *cg_voipSpeakingMask = NULL;
+    if (!cg_voipSpeakingMask) {
+        cg_voipSpeakingMask = cgi.Cvar_Get("cl_voipSpeakingMask", "0", 0);
+    }
+    
+    // Safety check for cg.snap
+    if (!cg.snap) {
+        return;
+    }
+    
+    int speakingMask = cg_voipSpeakingMask->integer;
+    int localClientNum = cg.snap->ps.clientNum;
+    qboolean isLocalPlayerSpeaking = (speakingMask & (1 << localClientNum)) != 0;
+    
+    if (!cg_voipSend || (!cg_voipSend->integer && !isLocalPlayerSpeaking)) {
         return;
     }
 

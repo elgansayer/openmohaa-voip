@@ -35,6 +35,14 @@ bool VoiceCodec::Init() {
 	// Set bitrate (~32kbps)
 	opus_encoder_ctl(encoder, OPUS_SET_BITRATE(32000));
 	
+	// Enable in-band FEC (Forward Error Correction)
+	opus_encoder_ctl(encoder, OPUS_SET_INBAND_FEC(1));
+	
+	// Set expected packet loss percentage (10%)
+	opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(10));
+	
+	Com_Printf("VoiceCodec: Initialized with FEC enabled (10%% packet loss tolerance)\n");
+	
 	initialized = true;
 	return true;
 }

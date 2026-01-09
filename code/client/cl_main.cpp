@@ -2888,6 +2888,13 @@ void CL_VoipFrame(void) {
 
 	cvar_t *cl_voipSend = Cvar_Get("cl_voipSend", "0", 0);
     // VAD Variables
+    static cvar_t *cl_voipUseVAD = NULL;
+    static cvar_t *cl_voipVADThreshold = NULL;
+    if (!cl_voipUseVAD) {
+        cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "1", CVAR_ARCHIVE);
+        cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE); // Lowered from 0.25 for better sensitivity
+    }
+    
     static int vadHangoverTime = 0;
     qboolean vadActive = qfalse;
     
@@ -2903,9 +2910,40 @@ void CL_VoipFrame(void) {
     }
 
 	bool capturing = ((cl_voipSend && cl_voipSend->integer) || vadActive) && (clc.state >= CA_CONNECTED);
+	
+	// IMPORTANT: Add/remove local player to/from speaking mask when capturing state changes
+	// This makes the mic icon and head icon show for the local player
+	if (clc.clientNum >= 0 && clc.clientNum < 32) {
+		int localMask = (1 << clc.clientNum);
+		static int lastSpeakingMask = 0;
+		int currentMask = Cvar_VariableIntegerValue("cl_voipSpeakingMask");
+		int newMask;
+		
+		if (capturing) {
+			// Add local player bit
+			newMask = currentMask | localMask;
+		} else {
+			// Remove local player bit
+			newMask = currentMask & ~localMask;
+		}
+		
+		if (newMask != lastSpeakingMask) {
+			Cvar_Set("cl_voipSpeakingMask", va("%d", newMask));
+			lastSpeakingMask = newMask;
+		}
+	}
 
 	// Update targets and flags based on send target cvar
 	cvar_t *targetCvar = Cvar_Get("cl_voipSendTarget", "spatial", 0);
+	static cvar_t *cl_voipTeamOnly = NULL;
+	if (!cl_voipTeamOnly) {
+		cl_voipTeamOnly = Cvar_Get("cl_voipTeamOnly", "0", CVAR_ARCHIVE);
+	}
+	
+	// TODO: Team filtering requires cgame integration (team info not available in client module)
+	// For now, cl_voipTeamOnly is registered but not functional
+	// This should be implemented server-side or via cgame callback
+	
 	if (!Q_stricmp(targetCvar->string, "spatial")) {
 		clc.voipFlags = VOIP_SPATIAL;
 		Com_Memset(clc.voipTargets, 0, sizeof(clc.voipTargets)); // Spatial doesn't need targets bitmask
@@ -2917,6 +2955,10 @@ void CL_VoipFrame(void) {
 		clc.voipFlags = VOIP_SPATIAL | VOIP_DIRECT;
 		Com_Memset(clc.voipTargets, ~0, sizeof(clc.voipTargets));
 	}
+
+	// VoIP icon is shown via HUD (cl_voipSpeakingMask triggers it)
+	// No need to show the meter menu
+	// User wants the same icon as +voiprecord, which is handled by the speaking mask
 
 	// Always start capture if VoIP is enabled, so the meter works
 	S_StartCapture();
@@ -2953,6 +2995,30 @@ void CL_VoipFrame(void) {
 			// Also update the cvar if we are connected or in a menu (for the meter)
 			// Actually the cvar is updated inside S_Capture now too, but we can enforce it here if needed.
 			// But wait, if S_Capture already updates it, we don't need to do it here.
+
+			// Simple Noise Gate (before encoding)
+			static int silenceFrames = 0;
+			static cvar_t *cl_voipNoiseGate = NULL;
+			static cvar_t *cl_voipNoiseThreshold = NULL;
+			
+			if (!cl_voipNoiseGate) {
+				cl_voipNoiseGate = Cvar_Get("cl_voipNoiseGate", "1", CVAR_ARCHIVE);
+				cl_voipNoiseThreshold = Cvar_Get("cl_voipNoiseThreshold", "0.02", CVAR_ARCHIVE);
+			}
+			
+			if (cl_voipNoiseGate && cl_voipNoiseGate->integer) {
+				float rms = sqrtf(total / FRAME_SIZE);
+				
+				if (rms < cl_voipNoiseThreshold->value) {
+					silenceFrames++;
+					// After 3 frames of silence (60ms), mute the audio
+					if (silenceFrames > 3) {
+						memset(pcmBuffer, 0, FRAME_SIZE * sizeof(int16_t));
+					}
+				} else {
+					silenceFrames = 0;
+				}
+			}
 
 			if (capturing && clc.voiceCodec) {
 				unsigned char packet[1024];
