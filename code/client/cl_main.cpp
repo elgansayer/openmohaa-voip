@@ -136,6 +136,10 @@ clientConnection_t	clc;
 cvar_t *cl_voip = NULL;
 cvar_t *voip_bitrate = NULL;
 cvar_t *cl_voipLoopback = NULL;
+cvar_t *cl_voipCaptureMult = NULL;
+cvar_t *cl_voipGainDuringCapture = NULL;
+cvar_t *cl_voipShowMeter = NULL;
+cvar_t *cl_voipSendTarget = NULL; // Declared here to be safe
 #endif
 clientStatic_t		cls;
 clientGameExport_t	*cge;
@@ -3863,6 +3867,10 @@ void CL_Init( void ) {
     voip_bitrate = Cvar_Get("voip_bitrate", "32000", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE); // 1 = play back to self
 	cl_voipLoopback = Cvar_Get("cl_voipLoopback", "0", CVAR_ARCHIVE); // 1 = play back to self via server return
+    cl_voipCaptureMult = Cvar_Get("cl_voipCaptureMult", "2.0", CVAR_ARCHIVE);
+    cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
+    cl_voipShowMeter = Cvar_Get("cl_voipShowMeter", "0", CVAR_ARCHIVE);
+    cl_voipSendTarget = Cvar_Get("cl_voipSendTarget", "spatial", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipProtocol", "opus", CVAR_USERINFO | CVAR_ROM);
     clc.voipEnabled = cl_voip->integer; 
 #endif

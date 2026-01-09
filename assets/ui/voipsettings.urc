@@ -71,78 +71,20 @@ resource Slider {
 }
 
 // ----------------------------------------------------
-// Activation
-// ----------------------------------------------------
-
-resource Label {
-    name "vad_title"
-    rect 10 115 460 18
-    fgcolor 1 0.8 0.2 1
-    font "verdana-12"
-    title "Voice Activation (VAD):"
-}
-
-resource Label {
-    name "vad_enable_label"
-    rect 10 140 180 20
-    fgcolor 1 1 1 1
-    font "verdana-12"
-    title "Enable VAD:"
-}
-resource CheckBox {
-    name "vad_enable_checkbox"
-    rect 200 140 20 20
-    linkcvar "cl_voipUseVAD"
-    font "verdana-12"
-}
-
-resource Label {
-    name "vad_thresh_label"
-    rect 10 165 180 20
-    fgcolor 1 1 1 1
-    font "verdana-12"
-    title "VAD Threshold:"
-}
-resource Slider {
-    name "vad_thresh_slider"
-    rect 200 165 200 18
-    fgcolor 0.5 0.5 0.5 1
-    linkcvar "cl_voipVADThreshold"
-    min 0.0
-    max 1.0
-}
-
-// ----------------------------------------------------
 // Volume / Audio Processing
 // ----------------------------------------------------
 
 resource Label {
     name "audio_title"
-    rect 10 195 460 18
+    rect 10 115 460 18
     fgcolor 1 0.8 0.2 1
     font "verdana-12"
     title "Audio Settings:"
 }
 
 resource Label {
-    name "vol_master_label"
-    rect 10 220 150 18
-    fgcolor 1 1 1 1
-    font "verdana-12"
-    title "Master Volume:"
-}
-resource Slider {
-    name "vol_master_slider"
-    rect 160 220 200 18
-    fgcolor 0.5 0.5 0.5 1
-    linkcvar "s_volume"
-    min 0.0
-    max 1.0
-}
-
-resource Label {
     name "duck_label"
-    rect 10 245 150 18
+    rect 10 140 150 18
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Ducking Volume:"
@@ -150,7 +92,7 @@ resource Label {
 // This controls how much game volume drops when you speak
 resource Slider {
     name "duck_slider"
-    rect 160 245 200 18
+    rect 160 140 200 18
     fgcolor 0.5 0.5 0.5 1
     linkcvar "cl_voipGainDuringCapture"
     min 0.0
@@ -159,14 +101,14 @@ resource Slider {
 
 resource Label {
     name "bitrate_label"
-    rect 10 270 150 18
+    rect 10 165 150 18
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Bitrate:"
 }
 resource Slider {
     name "bitrate_slider"
-    rect 160 270 200 18
+    rect 160 165 200 18
     fgcolor 0.5 0.5 0.5 1
     linkcvar "voip_bitrate"
     min 8000
@@ -180,7 +122,7 @@ resource Slider {
 
 resource Label {
     name "controls_title"
-    rect 10 300 460 18
+    rect 10 195 460 18
     fgcolor 1 0.8 0.2 1
     font "verdana-12"
     title "General:"
@@ -188,42 +130,56 @@ resource Label {
 
 resource Label {
     name "voip_enabled_label"
-    rect 10 325 180 20
+    rect 10 220 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Enable VoIP:"
 }
 resource CheckBox {
     name "voip_enabled_checkbox"
-    rect 200 325 20 20
+    rect 200 220 20 20
     linkcvar "cl_voip"
     font "verdana-12"
 }
 
 resource Label {
     name "voip_echo_label"
-    rect 10 350 180 20
+    rect 10 245 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Loopback Test (Echo):"
 }
 resource CheckBox {
     name "voip_echo_checkbox"
-    rect 200 350 20 20
+    rect 200 245 20 20
     linkcvar "cl_voipEcho"
     font "verdana-12"
 }
 
 resource Label {
+    name "voip_netloop_label"
+    rect 10 270 180 20
+    fgcolor 1 1 1 1
+    font "verdana-12"
+    title "Network Loopback:"
+}
+resource CheckBox {
+    name "voip_netloop_checkbox"
+    rect 200 270 20 20
+    linkcvar "cl_voipLoopback"
+    font "verdana-12"
+}
+
+resource Label {
     name "voip_muteall_label"
-    rect 10 375 180 20
+    rect 10 295 180 20
     fgcolor 1 1 1 1
     font "verdana-12"
     title "Mute All Incoming:"
 }
 resource Button {
     name "voip_muteall_button"
-    rect 200 375 150 24
+    rect 200 295 150 24
     font "verdana-12"
     title "Toggle Mute All"
     stuffcommand "cl_voipMuteAll"
@@ -231,7 +187,7 @@ resource Button {
 
 resource Button {
     name "close_button"
-    rect 190 420 100 30
+    rect 190 340 100 30
     font "verdana-12"
     title "Close"
     stuffcommand "popmenu"
