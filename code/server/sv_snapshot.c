@@ -1155,6 +1155,7 @@ static void SV_WriteVoipToClient(client_t *cl, msg_t *msg)
 
 	if(cl->queuedVoipPackets)
 	{
+		// Com_Printf("SV: Processing VoIP queue for %s. Count=%d DL='%s'\n", cl->name, cl->queuedVoipPackets, cl->downloadName);
 		// Write as many VoIP packets as we reasonably can...
 		for(i = 0; i < cl->queuedVoipPackets; i++)
 		{
@@ -1167,6 +1168,7 @@ static void SV_WriteVoipToClient(client_t *cl, msg_t *msg)
 		        		break;
 
         			MSG_WriteByte(msg, svc_voipOpus);
+					Com_Printf("SV: Sent VoIP packet to %s (len=%d, sender=%d)\n", cl->name, packet->len, packet->sender);
         			MSG_WriteShort(msg, packet->sender);
 	        		MSG_WriteByte(msg, (byte) packet->generation);
 		        	MSG_WriteLong(msg, packet->sequence);

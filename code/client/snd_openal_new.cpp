@@ -5109,6 +5109,10 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	qalGenBuffers(1, &buffer);
 	qalBufferData(buffer, format, data, samples * width * channels, rate);
 
+	// Enforce Head-Relative (Non-Spatial) playback for now to guarantee audibility
+	qalSourcei(voipSources[clientNum], AL_SOURCE_RELATIVE, AL_TRUE);
+	qalSource3f(voipSources[clientNum], AL_POSITION, 0, 0, 0);
+
 	// Queue and play
 	qalSourceQueueBuffers(voipSources[clientNum], 1, &buffer);
 
@@ -5116,4 +5120,7 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	if (state != AL_PLAYING) {
 		qalSourcePlay(voipSources[clientNum]);
 	}
+	
+	// Debug: Confirm audio backend is alive
+	Com_Printf("S_AL: Playing VoIP Stream %d (ClientNum %d)\n", stream, clientNum);
 }

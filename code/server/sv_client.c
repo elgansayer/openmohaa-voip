@@ -2030,9 +2030,12 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		if (client->state != CS_ACTIVE) {
 			continue;
 		}
+		// Network Loopback Enabled for Testing
+		/*
 		else if (i == sender) {
 			continue;
 		}
+		*/
 		else if (!client->hasVoip) {
 			continue;
 		}
