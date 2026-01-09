@@ -2019,6 +2019,9 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 	if (ignoreData || SV_ShouldIgnoreVoipSender(cl))
 		return;   // Blacklisted, disabled, etc.
 
+	// Set voipTalkEnd timestamp - talking flag will be set for 500ms after last packet
+	cl->voipTalkEnd = svs.time + 500;
+
 	// Set EF_PLAYER_TALKING flag on the sender's entity
 	// This makes the talking icon appear above their head for other players
 	{
@@ -2038,6 +2041,33 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		
 		if (client->state != CS_ACTIVE) {
 			continue;
+		}
+
+		// Team-Only VoIP Filtering
+		// Check if sender wants to restrict to team
+		static char val[2];
+		if ( Info_ValueForKey( cl->userinfo, "cl_voipTeamOnly" )[0] == '1' ) {
+            // Check if game is team-based (gametype > 0 usually, but we can just check if teams differ)
+            // Access team via playerState_t which is visible to engine
+            // NOTE: svs.clients[i].gentity is the gentity
+            gentity_t *senderEnt = cl->gentity;
+            gentity_t *destEnt = client->gentity;
+
+            if (senderEnt && destEnt && senderEnt->client && destEnt->client) {
+                // Use ps.stats[STAT_TEAM] or ps.persistant[PERS_TEAM]
+                // PERS_TEAM seems more reliable for persistent team state
+                int senderTeam = senderEnt->client->ps.stats[STAT_TEAM];
+                int destTeam = destEnt->client->ps.stats[STAT_TEAM];
+
+                if (senderTeam == TEAM_SPECTATOR) {
+                     // Spectators can usually talk to everyone or other spectators?
+                     // For 'TeamOnly', maybe just other spectators? 
+                     // Let's assume Spectators talk to Spectators
+                     if (destTeam != TEAM_SPECTATOR) continue;
+                } else if (senderTeam != destTeam) {
+                    continue; // Different team, skip
+                }
+            }
 		}
 		// Network Loopback Enabled for Testing
 		/*

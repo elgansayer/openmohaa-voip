@@ -1290,6 +1290,17 @@ void SV_SendClientMessages(void)
 		if(!c->state)
 			continue;		// not connected
 
+#ifdef USE_VOIP
+		// Update EF_PLAYER_TALKING flag based on voipTalkEnd timestamp
+		if (c->gentity) {
+			if (svs.time < c->voipTalkEnd) {
+				c->gentity->s.eFlags |= EF_PLAYER_TALKING;
+			} else {
+				c->gentity->s.eFlags &= ~EF_PLAYER_TALKING;
+			}
+		}
+#endif
+
 		if(svs.time - c->lastSnapshotTime < c->snapshotMsec * com_timescale->value)
 			continue;		// It's not time yet
 

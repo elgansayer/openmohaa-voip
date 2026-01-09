@@ -67,6 +67,72 @@ void CG_PlayerTeamIcon(refEntity_t *pModel, entityState_t *pPlayerState)
         }
     }
 
+    // Render VoIP talking icon for ANY player including local in 3rd person
+    if (pPlayerState->eFlags & EF_PLAYER_TALKING) {
+        int         i;
+        int         iTag;
+        float       fDist;
+        vec3_t      vTmp;
+        refEntity_t iconEnt;
+
+        // DEBUG: Log that we're rendering
+        static int lastDebugTime = 0;
+        if (cg.time - lastDebugTime > 1000) {
+            // cgi.Printf("CG: Rendering VoIP icon for player %d (flags: 0x%x)\n", 
+            //     pPlayerState->number, pPlayerState->eFlags);
+            lastDebugTime = cg.time;
+        }
+
+        memset(&iconEnt, 0, sizeof(iconEnt));
+        // Use custom VoIP talking sprite (packaged in zzz_voip.pk3)
+        iconEnt.hModel = cgi.R_RegisterModel("textures/hud/voip_talking.spr");
+
+        if (iconEnt.hModel) {
+            memset(vTmp, 0, sizeof(vTmp));
+            AnglesToAxis(vTmp, iconEnt.axis);
+
+            iconEnt.scale              = 0.5f;
+            iconEnt.renderfx           = 0;
+            iconEnt.reType             = RT_SPRITE;
+            iconEnt.shaderTime         = 0.0f;
+            iconEnt.frameInfo[0].index = 0;
+            iconEnt.shaderRGBA[0]      = -1;
+            iconEnt.shaderRGBA[1]      = -1;
+            iconEnt.shaderRGBA[2]      = -1;
+            VectorCopy(pModel->origin, iconEnt.origin);
+
+            iTag = cgi.Tag_NumForName(pModel->tiki, "eyes bone");
+            if (iTag == -1) {
+                iconEnt.origin[2] = iconEnt.origin[2] + 96.0f;
+            } else {
+                orientation_t oEyes = cgi.TIKI_Orientation(pModel, iTag);
+                for (i = 0; i < 3; ++i) {
+                    VectorMA(iconEnt.origin, oEyes.origin[i], pModel->axis[i], iconEnt.origin);
+                }
+                iconEnt.origin[2] = iconEnt.origin[2] + 20.0f;
+            }
+
+            VectorSubtract(iconEnt.origin, cg.refdef.vieworg, vTmp);
+            fDist = VectorLength(vTmp);
+
+            if (fDist < 256.0f) {
+                iconEnt.scale = fDist / 853.0f + 0.2f;
+            } else if (fDist > 512.0f) {
+                iconEnt.scale = (fDist - 512.0f) / 2560.0f + 0.5f;
+            }
+            if (iconEnt.scale > 1.0f) {
+                iconEnt.scale = 1.0f;
+            }
+
+            iconEnt.shaderRGBA[3] = 230; // High visibility
+            VectorMA(iconEnt.origin, -2.0f, cg.refdef.viewaxis[0], iconEnt.origin);
+            iconEnt.scale += 0.05f;
+            cgi.R_AddRefSpriteToScene(&iconEnt);
+        }
+        return; // VoIP icon rendered, done
+    }
+
+    // Skip local player for team icons (but VoIP icon already rendered above)
     if (pPlayerState->number == cg.snap->ps.clientNum) {
         return;
     }
@@ -81,6 +147,70 @@ void CG_PlayerTeamIcon(refEntity_t *pModel, entityState_t *pPlayerState)
         bInTeam = qtrue;
     }
 
+    // Render VoIP talking icon BEFORE FFA check - works in ALL game types
+    if (pPlayerState->eFlags & EF_PLAYER_TALKING) {
+        int         i;
+        int         iTag;
+        float       fAlpha;
+        float       fDist;
+        vec3_t      vTmp;
+        refEntity_t iconEnt;
+
+        memset(&iconEnt, 0, sizeof(iconEnt));
+        iconEnt.hModel = cgi.R_RegisterModel("textures/hud/talking_headicon.spr");
+
+        if (!iconEnt.hModel) {
+            goto skip_voip_icon; // Sprite not found, continue to team icons
+        }
+
+        memset(vTmp, 0, sizeof(vTmp));
+        AnglesToAxis(vTmp, iconEnt.axis);
+
+        iconEnt.scale              = 0.5f;
+        iconEnt.renderfx           = 0;
+        iconEnt.reType             = RT_SPRITE;
+        iconEnt.shaderTime         = 0.0f;
+        iconEnt.frameInfo[0].index = 0;
+        iconEnt.shaderRGBA[0]      = -1;
+        iconEnt.shaderRGBA[1]      = -1;
+        iconEnt.shaderRGBA[2]      = -1;
+        VectorCopy(pModel->origin, iconEnt.origin);
+
+        iTag = cgi.Tag_NumForName(pModel->tiki, "eyes bone");
+        if (iTag == -1) {
+            iconEnt.origin[2] = iconEnt.origin[2] + 96.0f;
+        } else {
+            orientation_t oEyes = cgi.TIKI_Orientation(pModel, iTag);
+            for (i = 0; i < 3; ++i) {
+                VectorMA(iconEnt.origin, oEyes.origin[i], pModel->axis[i], iconEnt.origin);
+            }
+            iconEnt.origin[2] = iconEnt.origin[2] + 20.0f;
+        }
+
+        VectorSubtract(iconEnt.origin, cg.refdef.vieworg, vTmp);
+        fDist = VectorLength(vTmp);
+
+        if (fDist < 256.0f) {
+            iconEnt.scale = fDist / 853.0f + 0.2f;
+        } else if (fDist > 512.0f) {
+            iconEnt.scale = (fDist - 512.0f) / 2560.0f + 0.5f;
+        }
+        if (iconEnt.scale > 1.0f) {
+            iconEnt.scale = 1.0f;
+        }
+
+        // Always visible for VoIP icons (no distance fade for FFA)
+        fAlpha = 0.9f;
+        iconEnt.shaderRGBA[3] = (int)(fAlpha * 255.0f);
+
+        VectorMA(iconEnt.origin, -2.0f, cg.refdef.viewaxis[0], iconEnt.origin);
+        iconEnt.scale += 0.05f;
+        cgi.R_AddRefSpriteToScene(&iconEnt);
+        return; // VoIP icon rendered, done
+    }
+
+skip_voip_icon:
+    // Team icons only in team game modes
     if (cgs.gametype <= GT_FFA) {
         return;
     }
@@ -1494,7 +1624,7 @@ void CG_ModelAnim(centity_t *cent, qboolean bDoShaderTime)
 
     if (cent->currentState.eType == ET_PLAYER && !(cent->currentState.eFlags & EF_DEAD)) {
         CG_PlayerTeamIcon(&model, &cent->currentState);
-        CG_PlayerVoipIcon(&model, &cent->currentState);
+        // CG_PlayerVoipIcon removed - VoIP icons now handled in CG_PlayerTeamIcon
     }
 
     if (s1->number == cg.snap->ps.clientNum) {

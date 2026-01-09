@@ -2937,7 +2937,7 @@ void CL_VoipFrame(void) {
 	cvar_t *targetCvar = Cvar_Get("cl_voipSendTarget", "spatial", 0);
 	static cvar_t *cl_voipTeamOnly = NULL;
 	if (!cl_voipTeamOnly) {
-		cl_voipTeamOnly = Cvar_Get("cl_voipTeamOnly", "0", CVAR_ARCHIVE);
+		cl_voipTeamOnly = Cvar_Get("cl_voipTeamOnly", "0", CVAR_ARCHIVE | CVAR_USERINFO);
 	}
 	
 	// TODO: Team filtering requires cgame integration (team info not available in client module)
@@ -2980,6 +2980,18 @@ void CL_VoipFrame(void) {
 		}
 
 		if (pcmBufferCount >= FRAME_SIZE) {
+			// Apply Capture Multiplier
+			float captureMult = cl_voipCaptureMult ? cl_voipCaptureMult->value : 1.0f;
+			if (captureMult != 1.0f) {
+				int j;
+				for (j = 0; j < FRAME_SIZE; j++) {
+					int val = (int)(pcmBuffer[j] * captureMult);
+					if (val > 32767) val = 32767;
+					if (val < -32768) val = -32768;
+					pcmBuffer[j] = (short)val;
+				}
+			}
+
 			// Calculate power/volume for HUD gauge
 			int i;
 			float total = 0;
@@ -3025,11 +3037,13 @@ void CL_VoipFrame(void) {
 				int len = clc.voiceCodec->Encode(pcmBuffer, FRAME_SIZE, packet, sizeof(packet));
 				
 				// NOISY DEBUG
+				/*
 				static int lastEnc = 0;
 				if (cls.realtime - lastEnc > 1000) {
 					Com_Printf("VoIP: Encoded frame, len=%d, voipPower=%.2f\n", len, clc.voipPower);
 					lastEnc = cls.realtime;
 				}
+				*/
 
 				if (len > 0) {
 					CL_WriteVoipPacket(packet, len);

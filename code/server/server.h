@@ -209,6 +209,7 @@ typedef struct client_s {
 	voipServerPacket_t *voipPacket[VOIP_QUEUE_LENGTH];
 	int queuedVoipPackets;
 	int queuedVoipIndex;
+	int voipTalkEnd;  // svs.time when talking should end (set on each VoIP packet)
 #endif
 
 	int				oldServerTime;

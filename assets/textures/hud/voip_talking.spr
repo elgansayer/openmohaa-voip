@@ -1,0 +1,9 @@
+SPRITE
+{
+	shader textures/hud/voip_talking
+	numframes 1
+	{
+		center 0.5 0.5
+		size 32 32
+	}
+}
