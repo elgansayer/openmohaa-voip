@@ -5095,7 +5095,11 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	}
 
 	// Update volume/position
-	qalSourcef(voipSources[clientNum], AL_GAIN, volume * s_volume->value);
+	// Fix: Boost VoIP volume significantly as it's too quiet
+	// 'volume' passed in is usually 1.0 or distance attenuated
+	float boost = 4.0f; 
+	// Apply master volume but boost the signal
+	qalSourcef(voipSources[clientNum], AL_GAIN, volume * s_volume->value * boost);
 
 	// Unqueue processed buffers to free them
 	qalGetSourcei(voipSources[clientNum], AL_BUFFERS_PROCESSED, &processed);
@@ -5107,7 +5111,27 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 
 	// Create and fill new buffer
 	qalGenBuffers(1, &buffer);
-	qalBufferData(buffer, format, data, samples * width * channels, rate);
+
+    // FUCK ME OPTION: Manually boost the PCM samples
+    // OpenAL AL_GAIN often doesn't boost beyond 1.0 effectively on some drivers.
+    if (width == 2) { 
+        // 16-bit audio
+        short *pcm = (short *)alloca(samples * channels * 2);
+        const short *src = (const short *)data;
+        int count = samples * channels;
+        float pcm_boost = 16.0f; // MASSIVE boost
+        
+        for (int i=0; i<count; i++) {
+            int val = (int)(src[i] * pcm_boost);
+            if (val > 32767) val = 32767;
+            if (val < -32768) val = -32768;
+            pcm[i] = (short)val;
+        }
+        qalBufferData(buffer, format, pcm, samples * width * channels, rate);
+    } else {
+        // Fallback for 8-bit (unlikely for Opus but safe)
+        qalBufferData(buffer, format, data, samples * width * channels, rate);
+    }
 
 	// Enforce Head-Relative (Non-Spatial) playback for now to guarantee audibility
 	qalSourcei(voipSources[clientNum], AL_SOURCE_RELATIVE, AL_TRUE);
