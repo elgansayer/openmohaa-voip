@@ -2899,9 +2899,17 @@ void CL_VoipFrame(void) {
     // static cvar_t *cl_voipVADThreshold = NULL;
     if (!cl_voipUseVAD) {
         cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "1", CVAR_ARCHIVE);
+    }
+    if (!cl_voipVADThreshold) {
         cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE);
+    }
+    if (!cl_voipScale) {
         cl_voipScale = Cvar_Get("cl_voipScale", "1.0", CVAR_ARCHIVE);
+    }
+    if (!cl_voipGainDuringCapture) {
         cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
+    }
+    if (!s_volumeVoice) {
         s_volumeVoice = Cvar_Get("s_volumeVoice", "1.0", CVAR_ARCHIVE);
     }
     
