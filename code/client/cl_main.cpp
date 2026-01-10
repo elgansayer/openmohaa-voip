@@ -39,6 +39,10 @@ extern "C" {
 #include "../gamespy/gcdkey/gcdkeyc.h"
 #include "snd_local.h"
 
+#ifdef USE_VOIP
+void CL_RunVoipJitterBuffer( void );
+#endif
+
 #include <climits>
 
 #ifdef USE_RENDERER_DLOPEN
@@ -2785,6 +2789,8 @@ CL_Frame
 */
 
 #ifdef USE_VOIP
+void CL_Voip_f( void );
+// void CL_RunVoipJitterBuffer( void ); // Moved to top
 void CL_WriteVoipPacket( const byte *data, int len ) {
 	if (!data || len <= 0) return;
 	if (len + 2 > (int)sizeof(clc.voipOutgoingData) - clc.voipOutgoingDataSize) {

@@ -107,8 +107,8 @@ void SNDDMA_InitCapture(void)
 	}
 
 	// Alias s_alCapture to s_sdlCapture for compliance
-	cvar_t *s_alCapture = Cvar_Get("s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH);
-	if (s_alCapture->integer) {
+	cvar_t *alCaptureCvar = Cvar_Get("s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH);
+	if (alCaptureCvar->integer) {
 		Cvar_Set("s_sdlCapture", "1");
 	}
 

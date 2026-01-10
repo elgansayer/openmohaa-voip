@@ -174,6 +174,29 @@ demo through a file.
 
 #define MAX_TIMEDEMO_DURATIONS	4096
 
+#ifdef USE_VOIP
+#define JB_PACKET_QUEUE_SIZE 32
+
+typedef struct {
+	byte	data[4096];
+	int		length;
+	int		sequence;
+	int		generation;
+	int		frames;
+	int		recvTime; // Realtime when received
+} voipPacket_t;
+
+typedef struct {
+	voipPacket_t	packets[JB_PACKET_QUEUE_SIZE];
+	int				readIndex;
+	int				writeIndex;
+	int				count;
+	int				currentGeneration;
+	int				lastSequencePop; // Last sequence number that was popped
+	float			drift; // Timing drift estimate
+} jitterBuffer_t;
+#endif
+
 typedef struct {
 
 	connstate_t	state;				// connection status
@@ -279,26 +302,7 @@ typedef struct {
     int voipFlushTime; // timestamp to force flush
 	float voipPower;
 
-#define JB_PACKET_QUEUE_SIZE 32
 
-	typedef struct {
-		byte	data[4096];
-		int		length;
-		int		sequence;
-		int		generation;
-		int		frames;
-		int		recvTime; // Realtime when received
-	} voipPacket_t;
-
-	typedef struct {
-		voipPacket_t	packets[JB_PACKET_QUEUE_SIZE];
-		int				readIndex;
-		int				writeIndex;
-		int				count;
-		int				currentGeneration;
-		int				lastSequencePop; // Last sequence number that was popped
-		float			drift; // Timing drift estimate
-	} jitterBuffer_t;
 
 	jitterBuffer_t voipJitterBuffers[MAX_CLIENTS];
 #endif
