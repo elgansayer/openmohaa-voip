@@ -106,6 +106,12 @@ void SNDDMA_InitCapture(void)
 		s_sdlAvailableCaptureDevices = Cvar_Get("s_sdlAvailableCaptureDevices", deviceList, CVAR_ROM | CVAR_NORESTART);
 	}
 
+	// Alias s_alCapture to s_sdlCapture for compliance
+	cvar_t *s_alCapture = Cvar_Get("s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH);
+	if (s_alCapture->integer) {
+		Cvar_Set("s_sdlCapture", "1");
+	}
+
 	if (!s_sdlCapture->integer)
 	{
 		Com_Printf("SDL audio capture support disabled by user ('+set s_sdlCapture 1' to enable)\n");

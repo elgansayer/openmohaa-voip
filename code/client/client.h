@@ -278,6 +278,29 @@ typedef struct {
 	byte voipOutgoingData[1024];
     int voipFlushTime; // timestamp to force flush
 	float voipPower;
+
+#define JB_PACKET_QUEUE_SIZE 32
+
+	typedef struct {
+		byte	data[4096];
+		int		length;
+		int		sequence;
+		int		generation;
+		int		frames;
+		int		recvTime; // Realtime when received
+	} voipPacket_t;
+
+	typedef struct {
+		voipPacket_t	packets[JB_PACKET_QUEUE_SIZE];
+		int				readIndex;
+		int				writeIndex;
+		int				count;
+		int				currentGeneration;
+		int				lastSequencePop; // Last sequence number that was popped
+		float			drift; // Timing drift estimate
+	} jitterBuffer_t;
+
+	jitterBuffer_t voipJitterBuffers[MAX_CLIENTS];
 #endif
 
 #ifdef LEGACY_PROTOCOL

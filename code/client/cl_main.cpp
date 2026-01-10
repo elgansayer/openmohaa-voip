@@ -3202,6 +3202,7 @@ void CL_Frame ( int msec ) {
 
 #ifdef USE_VOIP
 	CL_VoipFrame();
+	CL_RunVoipJitterBuffer();
 #endif
 
 	// resend a connection request if necessary

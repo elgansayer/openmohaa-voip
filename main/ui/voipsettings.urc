@@ -59,7 +59,7 @@ resource Slider {
     name "mic_gain_slider"
     rect 160 85 200 18
     fgcolor 0.5 0.5 0.5 1
-    linkcvar "cl_voipScale"
+    linkcvar "s_alCaptureMult"
     min 0.0
     max 4.0
 }
