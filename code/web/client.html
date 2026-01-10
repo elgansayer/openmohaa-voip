@@ -1,11 +1,23 @@
 <!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>@CLIENT_NAME@ Emscripten demo</title>
 <style>
-html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: rgb(0, 0, 0); display:flex; align-items: center; justify-content: center; }
-canvas { max-width: 100%; max-height: 100%; min-width: 100%; min-height: 100%; object-fit: contain; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: rgb(0, 0, 0); display:flex; align-items: center; justify-content: center; font-family: sans-serif; }
+canvas { max-width: 100%; max-height: 100%; min-width: 100%; min-height: 100%; object-fit: contain; outline: none; }
+#loading-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; transition: opacity 0.5s ease-out; }
+#loading-overlay.hidden { opacity: 0; pointer-events: none; }
+.spinner { width: 40px; height: 40px; border: 4px solid rgba(255, 255, 255, 0.3); border-radius: 50%; border-top-color: #fff; animation: spin 1s ease-in-out infinite; margin-bottom: 20px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#status-text { font-size: 1.2rem; color: #ccc; }
+#error-message { color: #ff6b6b; max-width: 600px; text-align: center; display: none; padding: 20px; }
 </style>
 
-<canvas id=canvas></canvas>
+<div id="loading-overlay">
+    <div class="spinner" id="spinner"></div>
+    <div id="status-text">Initializing...</div>
+    <div id="error-message"></div>
+</div>
+
+<canvas id="canvas" aria-label="@CLIENT_NAME@ Game Screen" role="application" tabindex="0"></canvas>
 
 <script type=module>
 // These strings are set in the generated HTML file in the build directory.
@@ -20,7 +32,29 @@ let dataPath = './';
 // Path or URL for config file that specifies the files to load for each fs_game.
 let configFilename = `./${CLIENT_NAME}-config.json`;
 
-if (window.location.protocol === 'file:') throw new Error(`Unfortunately browser security restrictions prevent loading wasm from a file: URL. This file must be loaded from a web server. The easiest way to do this is probably to use Python\'s built-in web server by running \`python3 -m http.server\` in the top level source directory and then navigate to http://localhost:8000/build/debug-emscripten-wasm32/${CLIENT_NAME}.html`);
+const overlay = document.getElementById('loading-overlay');
+const statusText = document.getElementById('status-text');
+const spinner = document.getElementById('spinner');
+const errorMsg = document.getElementById('error-message');
+const canvas = document.getElementById('canvas');
+
+function setStatus(text) {
+    if (!text) return;
+    statusText.innerText = text;
+}
+
+function showError(text) {
+    spinner.style.display = 'none';
+    statusText.style.display = 'none';
+    errorMsg.innerText = text;
+    errorMsg.style.display = 'block';
+}
+
+if (window.location.protocol === 'file:') {
+    const msg = `Unfortunately browser security restrictions prevent loading wasm from a file: URL. This file must be loaded from a web server. The easiest way to do this is probably to use Python\'s built-in web server by running \`python3 -m http.server\` in the top level source directory and then navigate to http://localhost:8000/build/debug-emscripten-wasm32/${CLIENT_NAME}.html`;
+    showError(msg);
+    throw new Error(msg);
+}
 
 // First set up the command line arguments and the Emscripten filesystem.
 const urlParams = new URLSearchParams(window.location.search);
@@ -45,10 +79,22 @@ const configPromise = EMSCRIPTEN_PRELOAD_FILE ? Promise.resolve({[BASEGAME]: {fi
   : fetch(configFilename).then(r => r.ok ? r.json() : { /* empty config */ });
 
 const ioquake3 = (await import(enginePath + `@CLIENT_BINARY@.js`)).default;
+
+// Prevent right click on canvas
+canvas.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); };
+
 ioquake3({
     canvas: canvas,
     arguments: generatedArguments.trim().split(/\s+/),
     locateFile: (file) => enginePath + file,
+    setStatus: (text) => {
+        if (text) setStatus(text);
+        // If text is empty, it usually means done, but we'll use onRuntimeInitialized to be sure.
+    },
+    onRuntimeInitialized: () => {
+        overlay.classList.add('hidden');
+        canvas.focus();
+    },
     preRun: [async (module) => {
         module.addRunDependency('setup-ioq3-filesystem');
         try {
@@ -65,6 +111,7 @@ ioquake3({
                     continue;
                 }
                 const files = config[gamedir].files;
+                setStatus(`Downloading ${gamedir} data...`);
                 const fetches = files.map(file => fetch(new URL(file.src, dataURL)));
                 for (let i = 0; i < files.length; i++) {
                     const response = await fetches[i];
