@@ -520,10 +520,10 @@ extern	cvar_t	*s_alCaptureMult;
 extern	cvar_t	*cl_voipShowMeter;
 extern	cvar_t	*cl_voip;
 
-// 20ms at 48k
-#define VOIP_MAX_FRAME_SAMPLES		( 20 * 48 )
+// 60ms at 48k (Opus frame size)
+#define VOIP_MAX_FRAME_SAMPLES		( 60 * 48 )
 
-// 3 frame is 60ms of audio, the max opus will encode at once
+// 1 frame is now 60ms of audio, but we can still bundle if needed.
 #define VOIP_MAX_PACKET_FRAMES		3
 #define VOIP_MAX_PACKET_SAMPLES		( VOIP_MAX_FRAME_SAMPLES * VOIP_MAX_PACKET_FRAMES )
 #endif

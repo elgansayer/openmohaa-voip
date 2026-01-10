@@ -2954,9 +2954,9 @@ void CL_VoipFrame(void) {
 	S_StartCapture();
 	
 	int available = S_AvailableCaptureSamples();
-	static short pcmBuffer[960]; // 20ms at 48kHz
+	static short pcmBuffer[VOIP_FRAME_SIZE]; // 60ms at 48kHz
 	static int pcmBufferCount = 0;
-	const int FRAME_SIZE = 960; 
+	const int FRAME_SIZE = VOIP_FRAME_SIZE;
 
 	// Capture in chunks
 	while (available > 0) {

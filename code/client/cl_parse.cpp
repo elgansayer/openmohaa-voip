@@ -949,10 +949,40 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 	if (seqdiff != 0) {
 		Com_DPrintf("VoIP: Dropped %d frames from client #%d\n",
 		            seqdiff, sender);
+
+		// Check if we can use FEC from the current packet to recover the last missing frame
+		const unsigned char *fec_data = NULL;
+		int fec_len = 0;
+
+		// We need at least one frame in the current packet to extract FEC
+		if (frames > 0 && packetsize >= 2) {
+			// Parse the length of the first frame in the current packet
+			int firstFrameLen = encoded[0] | (encoded[1] << 8);
+			if (packetsize >= 2 + firstFrameLen) {
+				fec_data = encoded + 2;
+				fec_len = firstFrameLen;
+			}
+		}
+
 		// tell opus that we're missing frames...
 		for (i = 0; i < seqdiff; i++) {
 			assert((written + VOIP_MAX_PACKET_SAMPLES) * 2 < sizeof (decoded));
-			numSamples = clc.voiceCodec->Decode(sender, NULL, 0, decoded + written, VOIP_MAX_PACKET_SAMPLES, qfalse);
+
+			int numSamples = -1;
+
+			// Try FEC for the last missing frame if available
+			if (i == seqdiff - 1 && fec_data) {
+				numSamples = clc.voiceCodec->Decode(sender, fec_data, fec_len, decoded + written, VOIP_MAX_PACKET_SAMPLES, qtrue);
+				if (numSamples > 0) {
+					Com_DPrintf("VoIP: Recovered frame using FEC\n");
+				}
+			}
+
+			// Fallback to PLC if FEC not used or failed
+			if (numSamples <= 0) {
+				numSamples = clc.voiceCodec->Decode(sender, NULL, 0, decoded + written, VOIP_MAX_PACKET_SAMPLES, qfalse);
+			}
+
 			if ( numSamples <= 0 ) {
 				Com_DPrintf("VoIP: Error decoding frame %d from client #%d\n", i, sender);
 				continue;
