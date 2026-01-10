@@ -260,12 +260,14 @@ typedef enum {
 	NETO_ALWAYS
 } netoptimize_e;
 
+#ifdef USE_VOIP
 #define VOIP_TARGET_SPATIAL 0
 #define VOIP_TARGET_CROSSHAIR 1
 #define VOIP_TARGET_TEAM 2
 #define VOIP_TARGET_ATTACKER 3
 #define VOIP_TARGET_ALL 4
 #define VOIP_TARGET_NONE 5
+#endif
 
 typedef struct {
 	netadr_t	adr;

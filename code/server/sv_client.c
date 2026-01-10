@@ -2051,11 +2051,6 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		}
 	}
 
-	/* Check bounds */
-	if ( (msg->readcount + packetsize) > msg->cursize ) {
-		return;
-	}
-
 	/* We only support Opus. The packet contains raw Opus frames.
 	   Since we don't have a codec header, we assume it's valid Opus or the decoder will just fail/skip it. */
 	
@@ -2081,8 +2076,20 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 
 	/* decide who needs this VoIP packet sent to them... */
 	for (i = 0, client = svs.clients; i < sv_maxclients->integer ; i++, client++) {
+		/* Reset flags for each recipient */
+		int recipientFlags = 0;
 		
 		if (client->state != CS_ACTIVE) {
+			continue;
+		}
+
+		if (!client->hasVoip) {
+			continue;
+		}
+		else if (client->muteAllVoip) {
+			continue;
+		}
+		else if (client->ignoreVoipFromClient[sender]) {
 			continue;
 		}
 
@@ -2091,6 +2098,7 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 			if (crosshairTargetNum != i) {
 				continue; /* Skip if not the target */
 			}
+			recipientFlags |= VOIP_DIRECT;
 		}
 		/* 2. Attacker Targeting */
 		else if (targetMode == VOIP_TARGET_ATTACKER) {
@@ -2117,14 +2125,15 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
                     continue; 
                 }
             }
+			recipientFlags |= VOIP_DIRECT;
 		}
 		/* 4. Spatial (Default) - Standard distance check */
 		else if (targetMode == VOIP_TARGET_SPATIAL) {
-			flags |= (VOIP_SPATIAL | VOIP_DIRECT); /* Ensure spatial processing downstream */
+			recipientFlags |= (VOIP_SPATIAL | VOIP_DIRECT); /* Ensure spatial processing downstream */
 		}
 		/* 5. All - Everyone hears */
 		else if (targetMode == VOIP_TARGET_ALL) {
-			flags |= VOIP_DIRECT; 
+			recipientFlags |= VOIP_DIRECT; 
 		}
 		/* 6. None */
 		else if (targetMode == VOIP_TARGET_NONE) {
@@ -2137,26 +2146,19 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 			continue;
 		}
 		*/
-		
-		if (!client->hasVoip) {
-			continue;
-		}
-		else if (client->muteAllVoip) {
-			continue;
-		}
-		else if (client->ignoreVoipFromClient[sender]) {
-			continue;
-		}
-		else if (*cl->downloadName) {
-			continue;
+
+		/* If no flags set yet, default to DIRECT */
+		if (recipientFlags == 0) {
+			recipientFlags |= VOIP_DIRECT;
 		}
 
 		if(Com_IsVoipTarget(recips, sizeof(recips), i))
-			flags |= VOIP_DIRECT;
+			recipientFlags |= VOIP_DIRECT;
 		else
-			flags &= ~VOIP_DIRECT;
+			recipientFlags &= ~VOIP_DIRECT;
 
-		if (!(flags & (VOIP_SPATIAL | VOIP_DIRECT))) {
+		/* Skip if no valid routing flags */
+		if (!(recipientFlags & (VOIP_SPATIAL | VOIP_DIRECT))) {
 			continue;
 		}
 
@@ -2172,14 +2174,11 @@ void SV_UserVoip(client_t *cl, msg_t *msg, qboolean ignoreData)
 		packet->len = packetsize;
 		packet->generation = generation;
 		packet->sequence = sequence;
-		packet->flags = flags;
+		packet->flags = recipientFlags;
 		memcpy(packet->data, encoded, packetsize);
 
 		client->voipPacket[(client->queuedVoipIndex + client->queuedVoipPackets) % ARRAY_LEN(client->voipPacket)] = packet;
 		client->queuedVoipPackets++;
-		
-		Com_DPrintf("SV_VoIP: Queued packet for client %d (flags=%d, queue depth=%d)\n", 
-			i, flags, client->queuedVoipPackets);
 	}
 }
 #endif

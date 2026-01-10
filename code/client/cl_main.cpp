@@ -2810,94 +2810,6 @@ void CL_WriteVoipPacket( const byte *data, int len ) {
     if (clc.voipOutgoingDataFrames == 1) {
         clc.voipFlushTime = cls.realtime + 60;
     }
-	
-	static int lastLog = 0;
-	if (cls.realtime - lastLog > 2000) {
-		Com_DPrintf("VoIP CLIENT: Buffered %d bytes, total buffered=%d, frames=%d\n", 
-			len, clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
-		lastLog = cls.realtime;
-	}
-}
-
-/*
-===================
-CL_FlushVoipOutgoingBuffer
-
-RFC 6716 Compliance: Decouple VoIP transmission from game tick
-Transmits buffered VoIP data based on 60ms timing, not sv_fps
-===================
-*/
-void CL_FlushVoipOutgoingBuffer(void) {
-	if (clc.voipOutgoingDataSize == 0) {
-		return; // Nothing to send
-	}
-	
-	if (!(clc.voipFlags & VOIP_SPATIAL) && !Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1)) {
-		// No targets, discard data
-		clc.voipOutgoingDataSize = 0;
-		clc.voipOutgoingDataFrames = 0;
-		return;
-	}
-	
-	// Bandwidth Control: sv_voipEncapsulation (frame bundling)
-	int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
-	if (encapsulation <= 0) encapsulation = 1;
-	
-	// RFC 6716: Force flush after 60ms to maintain frame timing
-	qboolean forceFlush = (cls.realtime >= clc.voipFlushTime);
-	
-	// Only send if we have enough frames OR timeout reached
-	if (!forceFlush && clc.voipOutgoingDataFrames < encapsulation && 
-	    clc.voipOutgoingDataSize < sizeof(clc.voipOutgoingData) - 200) {
-		return; // Keep buffering
-	}
-	
-	// Build VoIP packet
-	msg_t buf;
-	byte data[MAX_MSGLEN];
-	MSG_Init(&buf, data, sizeof(data));
-	MSG_Bitstream(&buf);
-	
-	MSG_WriteByte(&buf, clc_voipOpus);
-	MSG_WriteByte(&buf, clc.voipOutgoingGeneration);
-	MSG_WriteLong(&buf, clc.voipOutgoingSequence);
-	MSG_WriteByte(&buf, clc.voipOutgoingDataFrames);
-	MSG_WriteShort(&buf, clc.voipOutgoingDataSize);
-	MSG_WriteData(&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
-	
-	Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes, %d frames)\n", 
-		clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
-	
-	// Send to server via reliable channel
-	CL_Netchan_Transmit(&clc.netchan, &buf);
-	
-	// Demo recording support
-	if (clc.demorecording && !clc.demowaiting) {
-		const int voipSize = clc.voipOutgoingDataSize;
-		msg_t fakemsg;
-		byte fakedata[MAX_MSGLEN];
-		MSG_Init(&fakemsg, fakedata, sizeof(fakedata));
-		MSG_Bitstream(&fakemsg);
-		MSG_WriteLong(&fakemsg, clc.reliableAcknowledge);
-		MSG_WriteByte(&fakemsg, svc_voipOpus);
-		MSG_WriteShort(&fakemsg, clc.clientNum);
-		MSG_WriteByte(&fakemsg, clc.voipOutgoingGeneration);
-		MSG_WriteLong(&fakemsg, clc.voipOutgoingSequence);
-		MSG_WriteByte(&fakemsg, clc.voipOutgoingDataFrames);
-		MSG_WriteShort(&fakemsg, clc.voipOutgoingDataSize);
-		MSG_WriteBits(&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
-		MSG_WriteData(&fakemsg, clc.voipOutgoingData, voipSize);
-		MSG_WriteByte(&fakemsg, svc_EOF);
-		CL_WriteDemoMessage(&fakemsg, 0);
-	}
-	
-	// Update sequence and reset buffers
-	clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
-	clc.voipOutgoingDataSize = 0;
-	clc.voipOutgoingDataFrames = 0;
-	
-	// Set next flush time to maintain 60ms cadence
-	clc.voipFlushTime = cls.realtime + 60;
 }
 
 void CL_VoipFrame(void) {
@@ -2905,6 +2817,13 @@ void CL_VoipFrame(void) {
 		clc.voipPower = 0;
 		Cvar_Set("s_voipLevel", "0");
         Cvar_Set("cl_voipSpeakingMask", "0"); // Ensure mask is cleared if VoIP disabled
+		return;
+	}
+
+	// Don't capture/process VoIP until we're actually in-game
+	if (clc.state != CA_ACTIVE) {
+		clc.voipPower = 0;
+		Cvar_Set("s_voipLevel", "0");
 		return;
 	}
 
@@ -3077,13 +2996,12 @@ void CL_VoipFrame(void) {
 				total += sample * sample;
 			}
 			// RMS power with smoothing
-			float currentPower = sqrtf(total / FRAME_SIZE) * 5.0f; // Scale it up for visibility
+			float currentPower = sqrtf(total / FRAME_SIZE) * 5.0f;
 			clc.voipPower = (clc.voipPower * 0.7f) + (currentPower * 0.3f);
 			if (clc.voipPower > 1.0f) clc.voipPower = 1.0f;
-
-			// Also update the cvar if we are connected or in a menu (for the metre)
-			// Actually the cvar is updated inside S_Capture now too, but we can enforce it here if needed.
-			// But wait, if S_Capture already updates it, we don't need to do it here.
+			
+			// Update s_voipLevel cvar for UI meter
+			Cvar_Set("s_voipLevel", va("%.2f", clc.voipPower));
 
 			// Simple Noise Gate (before encoding)
 			static int silenceFrames = 0;
@@ -3144,9 +3062,6 @@ void CL_VoipFrame(void) {
 		// Keep capture running so the HUD metre works even when not transmitting (for testing mic).
 		// S_StopCapture(); 
 	}
-	
-	// RFC 6716: Flush VoIP packets based on 60ms timing, not game tick
-	CL_FlushVoipOutgoingBuffer();
 }
 #endif
 
@@ -4087,19 +4002,21 @@ void CL_Init( void ) {
 
 #ifdef USE_VOIP
 	cl_voip = Cvar_Get("cl_voip", "1", CVAR_ARCHIVE);
+	cl_voipSend = Cvar_Get("cl_voipSend", "0", CVAR_TEMP);
     voip_bitrate = Cvar_Get("voip_bitrate", "32000", CVAR_ARCHIVE);
-	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE); // 1 = play back to self
-	cl_voipLoopback = Cvar_Get("cl_voipLoopback", "0", CVAR_ARCHIVE); // 1 = play back to self via server return
+	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE);
+	cl_voipLoopback = Cvar_Get("cl_voipLoopback", "0", CVAR_ARCHIVE);
     s_alCaptureMult = Cvar_Get("s_alCaptureMult", "2.0", CVAR_ARCHIVE);
     cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
     cl_voipShowMeter = Cvar_Get("cl_voipShowMeter", "0", CVAR_ARCHIVE);
     cl_voipSendTarget = Cvar_Get("cl_voipSendTarget", "spatial", CVAR_ARCHIVE);
     cl_voipSpeakingMask = Cvar_Get("cl_voipSpeakingMask", "0", CVAR_ROM);
     cl_voipMuteMask = Cvar_Get("cl_voipMuteMask", "0", CVAR_ROM);
-    cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "0", CVAR_ARCHIVE);
+    cl_voipUseVAD = Cvar_Get("cl_voipUseVAD", "1", CVAR_ARCHIVE);
     cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipProtocol", "opus", CVAR_USERINFO | CVAR_ROM);
-    clc.voipEnabled = cl_voip->integer; 
+    clc.voipEnabled = cl_voip->integer;
+	Com_Printf("^2VoIP INIT: cl_voip=%d, clc.voipEnabled=%d\n", cl_voip->integer, clc.voipEnabled);
 #endif
 
 	cl_run = Cvar_Get( "cl_run", "1", CVAR_ARCHIVE );

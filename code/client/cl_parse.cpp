@@ -811,20 +811,27 @@ void CL_ParseDownload ( msg_t *msg ) {
 static qboolean CL_ShouldIgnoreVoipSender(int sender)
 {
 	if (!cl_voip->integer) {
-		//Com_Printf("VoIP: Ignored sender %d (VoIP disabled)\n", sender);
-		return qtrue;  // VoIP is disabled.
-	} else if ((sender == clc.clientNum) && (!clc.demoplaying) && (!cl_voipLoopback->integer)) {
-		//Com_Printf("VoIP: Ignored sender %d (Own voice, loopback off)\n", sender);
-		return qtrue;  // ignore own voice (unless playing back a demo or loopback enabled).
-	} else if (clc.voipMuteAll) {
-		//Com_Printf("VoIP: Ignored sender %d (Mute All)\n", sender);
-		return qtrue;  // all channels are muted with extreme prejudice.
-	} else if (clc.voipIgnore[sender]) {
-		//Com_Printf("VoIP: Ignored sender %d (Ignored)\n", sender);
-		return qtrue;  // just ignoring this guy.
-	} else if (clc.voipGain[sender] == 0.0f) {
-		//Com_Printf("VoIP: Ignored sender %d (Gain is 0.0)\n", sender);
-		return qtrue;  // too quiet to play.
+		return qtrue;
+	}
+	
+	if ((sender == clc.clientNum) && (!clc.demoplaying)) {
+		if (!cl_voipLoopback || !cl_voipLoopback->integer) {
+			return qtrue;
+		} else {
+			return qfalse;
+		}
+	}
+	
+	if (clc.voipMuteAll) {
+		return qtrue;
+	}
+	
+	if (clc.voipIgnore[sender]) {
+		return qtrue;
+	}
+	
+	if (clc.voipGain[sender] == 0.0f) {
+		return qtrue;
 	}
 
 	return qfalse;
@@ -939,87 +946,114 @@ void CL_RunVoipJitterBuffer( void ) {
         // Skip ignored/muted clients
         if (CL_ShouldIgnoreVoipSender(i)) {
              // If we have data but are ignoring it, flush it
-             if (clc.voipJitterBuffers[i].count > 0) JB_Reset(i);
+             if (clc.voipJitterBuffers[i].count > 0) {
+                 Com_Printf("VoIP: Flushing JB for ignored sender %d\n", i);
+                 JB_Reset(i);
+             }
              continue;
         }
 
 		jitterBuffer_t *jb = &clc.voipJitterBuffers[i];
 		if (jb->count == 0 && jb->lastSequencePop == -1) continue; // Nothing happening
-
-        // RFC 6716: 60ms framing with adaptive playout
-        voipPacket_t *pkt = JB_GetNextPacket(i);
-        
-        if (!pkt) {
-             // Buffer empty - check for DTX vs packet loss
+		
+		// RFC 6716: 60ms framing with adaptive playout
+		voipPacket_t *pkt = JB_GetNextPacket(i);
+		
+		if (!pkt) {
+			// Buffer empty or sequence gap - check for packet loss
              if (jb->lastPacketTime > 0 && (cls.realtime - jb->lastPacketTime) > 200) {
                  // Likely DTX (silence period), not loss
                  continue;
              }
              
-             // FEC Recovery: If we have a gap and next packet with FEC data
-             voipPacket_t *nextPkt = JB_GetNextPacket(i);
-             if (nextPkt && clc.voiceCodec) {
-                 // Try to recover lost frame using FEC from next packet
-                 int numSamples = clc.voiceCodec->Decode(i, nextPkt->data, nextPkt->length, 
-                                                         decoded, ARRAY_LEN(decoded), qtrue); // decode_fec=true
-                 if (numSamples > 0) {
-                     Com_DPrintf("VoIP: FEC recovered %d samples for client %d\n", numSamples, i);
-                     CL_PlayVoip(i, numSamples, (const byte *)decoded, VOIP_SPATIAL);
-                     clc.voipLastPacketTime[i] = cls.realtime;
+             // FEC Recovery: If we have a sequence gap and buffer has next packet
+             if (jb->count > 0 && jb->lastSequencePop != -1 && clc.voiceCodec) {
+                 // Peek at next packet without popping
+                 voipPacket_t *nextPkt = &jb->packets[jb->readIndex];
+                 
+                 // Validate packet data before using for FEC
+                 if (nextPkt && nextPkt->length > 0 && nextPkt->length < VOIP_MAX_PACKET_SIZE) {
+                     // Decode with FEC flag to recover lost packet
+                     int numSamples = clc.voiceCodec->Decode(i, nextPkt->data, nextPkt->length, 
+                                                             decoded, ARRAY_LEN(decoded), qtrue);
+                     if (numSamples > 0) {
+                         Com_DPrintf("VoIP: FEC recovered %d samples for client %d (gap before seq %d)\n", 
+                                    numSamples, i, nextPkt->sequence);
+                         CL_PlayVoip(i, numSamples, (const byte *)decoded, VOIP_SPATIAL);
+                         clc.voipLastPacketTime[i] = Sys_Milliseconds();
+                     }
                  }
              }
              continue;
         }
         
         // Adaptive Playout: Wait until we have TARGET_BUFFER_COUNT packets buffered
-        const int TARGET_BUFFER_COUNT = 1; // 60ms buffering
+        // 180ms minimum for WAN jitter tolerance (3 packets @ 60ms)
+        static cvar_t *cl_voipJitterMs = NULL;
+        if (!cl_voipJitterMs) cl_voipJitterMs = Cvar_Get("cl_voipJitterMs", "180", CVAR_ARCHIVE);
+        const int TARGET_BUFFER_COUNT = (cl_voipJitterMs->integer / 60);
         if (jb->lastSequencePop == -1 && jb->count < TARGET_BUFFER_COUNT) {
             continue; // Wait for initial buffering
         }
 		
-        // Timing: Only decode if enough time has passed (decouples from game tick)
-        int packetDuration = 60; // ms (RFC 6716 standard frame duration)
+        // Timing: Use monotonic realtime (not game time) for playout timing
+        int packetDuration = 60; // ms (Opus frame duration)
+        int currentTime = Sys_Milliseconds();
         
-        // Adaptive drift correction
+        // Adaptive drift correction with larger adjustments for network jitter
         if (jb->lastPacketTime > 0) {
             int expectedTime = jb->lastPacketTime + packetDuration;
-            int drift = cls.realtime - expectedTime;
+            int drift = currentTime - expectedTime;
             
-            // If we're drifting ahead (buffer underrun risk), slow down slightly
-            if (drift < -10) {
-                packetDuration += 5; // Add small delay
+            // Adjust for network jitter (±10-20ms adjustments)
+            if (drift < -20) {
+                packetDuration += 10; // Slow down to prevent underrun
             }
-            // If we're drifting behind (buffer overrun risk), speed up slightly
-            else if (drift > 10) {
-                packetDuration -= 5; // Reduce delay
+            else if (drift > 20) {
+                packetDuration -= 10; // Speed up to prevent overrun
             }
         }
         
-        if (cls.realtime - clc.voipLastPacketTime[i] < packetDuration) {
+        if (currentTime - clc.voipLastPacketTime[i] < packetDuration) {
             continue; // Not time yet
         }
 		
-        // Process the packet
-		int written = 0;
-		int frames = pkt->frames;
-		int flags = pkt->flags; // Use flags stored in packet
+        // Process the packet - packet contains one or more length-prefixed Opus frames
+		int flags = pkt->flags;
 		
-        // Decode all frames in packet
-        int readPos = 0;
-        for (int f = 0; f < frames; f++) {
-            int frameLen = pkt->data[readPos] | (pkt->data[readPos+1] << 8);
-            readPos += 2;
+        // Loop through the packet data and decode each frame
+        int pos = 0;
+        int framesDecoded = 0;
+
+        while (pos < pkt->length) {
+            // Read 2-byte frame length (Little Endian)
+            if (pos + 2 > pkt->length) {
+                Com_DPrintf("VoIP: Packet truncated at header (client %d)\n", i);
+                break;
+            }
+
+            int frameLen = pkt->data[pos] | (pkt->data[pos+1] << 8);
+            pos += 2;
+
+            if (pos + frameLen > pkt->length) {
+                Com_DPrintf("VoIP: Packet truncated at data (client %d, needed %d, left %d)\n", i, frameLen, pkt->length - pos);
+                break;
+            }
+
+            int numSamples = clc.voiceCodec->Decode(i, pkt->data + pos, frameLen, 
+                                                    decoded, ARRAY_LEN(decoded), qfalse);
             
-            int numSamples = clc.voiceCodec->Decode(i, pkt->data + readPos, frameLen, 
-                                                    decoded + written, ARRAY_LEN(decoded) - written, qfalse);
-            if (numSamples > 0) written += numSamples;
-            readPos += frameLen;
+            if (numSamples > 0) {
+                CL_PlayVoip(i, numSamples, (const byte *)decoded, flags);
+            }
+
+            pos += frameLen;
+            framesDecoded++;
         }
         
-        if (written > 0) {
-            CL_PlayVoip(i, written, (const byte *)decoded, flags);
-            clc.voipLastPacketTime[i] = cls.realtime;
-            jb->lastPacketTime = cls.realtime; // Track for adaptive playout
+        if (framesDecoded > 0) {
+            clc.voipLastPacketTime[i] = Sys_Milliseconds(); // Use monotonic time
+            jb->lastPacketTime = Sys_Milliseconds();
         }
         
         jb->lastSequencePop = pkt->sequence;
@@ -1036,8 +1070,6 @@ A VoIP message has been received from the server
 */
 static
 void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
-	//Com_Printf("CL: CL_ParseVoip called. ignoreData=%d\n", ignoreData);
-
 	const int sender = MSG_ReadShort(msg);
 	const int generation = MSG_ReadByte(msg);
 	const int sequence = MSG_ReadLong(msg);
@@ -1235,9 +1267,9 @@ void CL_ParseServerMessage( msg_t *msg ) {
 			// SELF-HEALING: If we are receiving VoIP, we should handle it!
 			if (!clc.voipEnabled) {
 				clc.voipEnabled = qtrue;
-				Com_Printf("CL: Auto-Enabled VoIP due to incoming packet.\n");
+				Com_DPrintf("CL: Auto-Enabled VoIP due to incoming packet.\n");
 			}
-			Com_Printf("CL: Recv svc_voipOpus. voipEnabled=%d [CHECK]\n", clc.voipEnabled);
+			Com_DPrintf("CL: Recv svc_voipOpus. voipEnabled=%d\n", clc.voipEnabled);
 			CL_ParseVoip( msg, !clc.voipEnabled );
 #endif
 			break;

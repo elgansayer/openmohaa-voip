@@ -129,13 +129,22 @@ void SNDDMA_InitCapture(void)
 		int samples;
 
 		SDL_zero(spec);
+		
+		// RFC 6716: Opus requires 48kHz - enforce but use cvar
 		spec.freq = s_sdlCaptureFreq->integer;
+		if (spec.freq != 48000) {
+			Com_Printf("^3Warning: Opus requires 48kHz sample rate, overriding s_sdlCaptureFreq from %d to 48000\n", spec.freq);
+			spec.freq = 48000;
+			Cvar_Set("s_sdlCaptureFreq", "48000");
+		}
+		
 		spec.format = AUDIO_S16SYS;
 		spec.channels = s_sdlCaptureChannels->integer;
 
 		samples = s_sdlCaptureSamples->integer;
 		if (samples <= 0) {
-			samples = VOIP_MAX_PACKET_SAMPLES * 4;
+			// 120ms buffer (2 frames @ 60ms = 5760 samples) instead of 720ms
+			samples = VOIP_MAX_FRAME_SAMPLES * 2;
 		}
 		spec.samples = samples;
 
@@ -144,29 +153,37 @@ void SNDDMA_InitCapture(void)
 		}
 
 		sdlCaptureDevice = SDL_OpenAudioDevice(deviceName, SDL_TRUE, &spec, NULL, 0);
+	Com_Printf("^2VoIP CAPTURE: Attempting to open device '%s' (freq=%d, channels=%d, samples=%d)\n", 
+		deviceName ? deviceName : "default", spec.freq, spec.channels, spec.samples);
 
-		if (sdlCaptureDevice == 0 && deviceName) {
-			Com_Printf("Failed to open capture device '%s', trying default.\n", deviceName);
-			deviceName = NULL;
-			sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
+	if (sdlCaptureDevice == 0 && deviceName) {
+		Com_Printf("Failed to open capture device '%s', trying default.\n", deviceName);
+		deviceName = NULL;
+		sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
+	}
+	
+	if (sdlCaptureDevice) {
+		Com_Printf("^2VoIP CAPTURE: Device opened successfully! ID=%d\n", sdlCaptureDevice);
+	} else {
+		Com_Printf("^1VoIP CAPTURE: FAILED to open device: %s\n", SDL_GetError());
+	}
+
+	// Store capture device name for UI display
+	{
+		const char *actualName = deviceName;
+		if (!actualName) {
+			const char *defName = SDL_GetAudioDeviceName(0, SDL_TRUE);
+			if (defName) actualName = defName;
+			else actualName = "Default Device";
 		}
 
-		// Store capture device name for UI display
-		{
-			const char *actualName = deviceName;
-			if (!actualName) {
-				const char *defName = SDL_GetAudioDeviceName(0, SDL_TRUE);
-				if (defName) actualName = defName;
-				else actualName = "Default Device";
-			}
-
-			Cvar_Get("s_captureDeviceName", actualName, CVAR_ROM | CVAR_NORESTART);
-			Cvar_Set("s_captureDeviceName", actualName);
-		}
+		Cvar_Get("s_captureDeviceName", actualName, CVAR_ROM | CVAR_NORESTART);
+		Cvar_Set("s_captureDeviceName", actualName);
 	}
 
 	s_voipLevel = Cvar_Get("s_voipLevel", "0", CVAR_ROM);
 	sdlMasterGain = 1.0f;
+	}
 #endif
 }
 
@@ -305,7 +322,73 @@ qboolean SNDDMA_Init(void)
 
 	Com_Printf( "OK\n" );
 
-    // ... init playback ...
+	Com_Printf( "SDL audio driver is \"%s\".\n", SDL_GetCurrentAudioDriver( ) );
+
+	memset(&desired, '\0', sizeof (desired));
+	memset(&obtained, '\0', sizeof (obtained));
+
+	tmp = ((int) s_sdlBits->value);
+	if ((tmp != 16) && (tmp != 8))
+		tmp = 16;
+
+	desired.freq = (int) s_sdlSpeed->value;
+	if(!desired.freq) desired.freq = 22050;
+	desired.format = ((tmp == 16) ? AUDIO_S16SYS : AUDIO_U8);
+
+	// I dunno if this is the best idea, but I'll give it a try...
+	//  should probably check a cvar for this...
+	if (s_sdlDevSamps->value)
+		desired.samples = s_sdlDevSamps->value;
+	else
+	{
+		// just pick a sane default.
+		if (desired.freq <= 11025)
+			desired.samples = 256;
+		else if (desired.freq <= 22050)
+			desired.samples = 512;
+		else if (desired.freq <= 44100)
+			desired.samples = 1024;
+		else
+			desired.samples = 2048;  // (*shrug*)
+	}
+
+	desired.channels = (int) s_sdlChannels->value;
+	desired.callback = SNDDMA_AudioCallback;
+
+	sdlPlaybackDevice = SDL_OpenAudioDevice(NULL, SDL_FALSE, &desired, &obtained, SDL_AUDIO_ALLOW_ANY_CHANGE);
+	if (sdlPlaybackDevice == 0)
+	{
+		Com_Printf("SDL_OpenAudioDevice() failed: %s\n", SDL_GetError());
+		SDL_QuitSubSystem(SDL_INIT_AUDIO);
+		return qfalse;
+	}
+
+	SNDDMA_PrintAudiospec("SDL_AudioSpec", &obtained);
+
+	// dma.samples needs to be big, or id's mixer will just refuse to
+	//  work at all; we need to keep it significantly bigger than the
+	//  amount of SDL callback samples, and just copy a little each time
+	//  the callback runs.
+	// 32768 is what the OSS driver filled in here on my system. I don't
+	//  know if it's a good value overall, but at least we know it's
+	//  reasonable...this is why I let the user override.
+	tmp = s_sdlMixSamps->value;
+	if (!tmp)
+		tmp = (obtained.samples * obtained.channels) * 10;
+
+	// samples must be divisible by number of channels
+	tmp -= tmp % obtained.channels;
+
+	dmapos = 0;
+	dma.samplebits = SDL_AUDIO_BITSIZE(obtained.format);
+	dma.isfloat = SDL_AUDIO_ISFLOAT(obtained.format);
+	dma.channels = obtained.channels;
+	dma.samples = tmp;
+	dma.fullsamples = dma.samples / dma.channels;
+	dma.submission_chunk = 1;
+	dma.speed = obtained.freq;
+	dmasize = (dma.samples * (dma.samplebits/8));
+	dma.buffer = calloc(1, dmasize);
     // And call InitCapture
     SNDDMA_InitCapture();
 
@@ -423,5 +506,4 @@ void SNDDMA_MasterGain( float val )
 	sdlMasterGain = val;
 #endif
 }
-#endif
-
+#endif // USE_VOIP

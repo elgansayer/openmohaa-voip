@@ -2711,6 +2711,20 @@ qboolean S_AL_Init( soundInterface_t *si )
 			int channels = s_alCaptureChannels->integer;
 			int bufferSize = s_alCaptureBufferSize->integer;
 
+			// Force 48kHz for Opus
+			if (rate != 48000) {
+				Com_Printf(S_COLOR_YELLOW "WARNING: forcing s_alCaptureSampleRate to 48000 for VoIP compatibility (was %d)\n", rate);
+				rate = 48000;
+				Cvar_Set("s_alCaptureSampleRate", "48000");
+			}
+
+			// Force 16-bit for Opus (and general sanity)
+			if (bits != 16) {
+				Com_Printf(S_COLOR_YELLOW "WARNING: forcing s_alCaptureBits to 16 for VoIP compatibility (was %d)\n", bits);
+				bits = 16;
+				Cvar_Set("s_alCaptureBits", "16");
+			}
+
 			if (bufferSize <= 0) {
 				bufferSize = VOIP_MAX_PACKET_SAMPLES * 4;
 			}
