@@ -247,6 +247,12 @@ jobs:
         if [ -d ${{github.workspace}}/install/bin ]; then cp -r ${{github.workspace}}/install/bin/openmohaa/. '${{github.workspace}}/package'; fi
         if [ -d ${{github.workspace}}/install/lib ]; then cp -r ${{github.workspace}}/install/lib/openmohaa/. '${{github.workspace}}/package'; fi
 
+    - name: Package Assets
+      working-directory: ${{github.workspace}}/source/main
+      run: |
+        mkdir -p ${{github.workspace}}/package/main
+        zip -r ${{github.workspace}}/package/main/openmohaa.pk3 . -x "*.DS_Store*" -x "*.pk3"
+
     ###
     # Artifacts
     ###

@@ -258,6 +258,18 @@ jobs:
         if (Test-Path ${{github.workspace}}/install/bin) { Copy-Item '${{github.workspace}}/install/bin/*' -Include '*.dll','*.exe','*.pdb' -Destination '${{github.workspace}}/package' }
         if (Test-Path ${{github.workspace}}/install/lib) { Copy-Item '${{github.workspace}}/install/lib/*' -Include '*.dll','*.exe','*.pdb' -Destination '${{github.workspace}}/package' }
 
+    - name: Package Assets
+      working-directory: ${{github.workspace}}/source/main
+      run: |
+        New-Item -ItemType Directory '${{github.workspace}}/package/main' -Force
+        # Using 7z if available or Compress-Archive
+        if (Get-Command 7z -ErrorAction SilentlyContinue) {
+          7z a -tzip "${{github.workspace}}/package/main/openmohaa.pk3" . -xr!*.pk3 -xr!*.DS_Store
+        } else {
+          Compress-Archive -Path ./* -DestinationPath "${{github.workspace}}/package/main/openmohaa.zip" -Force
+          Move-Item -Path "${{github.workspace}}/package/main/openmohaa.zip" -Destination "${{github.workspace}}/package/main/openmohaa.pk3" -Force
+        }
+
     - name: Generate setup files
       working-directory: ${{github.workspace}}
       run: |

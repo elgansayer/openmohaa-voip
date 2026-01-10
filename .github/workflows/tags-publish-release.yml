@@ -41,13 +41,14 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build PK3
-      working-directory: assets
-      run: zip -9 -r ../zzz_voip.pk3 ./
-
+      run: |
+        cd main
+        zip -9 -r ../openmohaa.pk3 . -x "*.pk3"
+    
     - name: Release
       uses: softprops/action-gh-release@v2.3.2
       with:
-        files: zzz_voip.pk3
+        files: openmohaa.pk3
 
   deploy-all:
     strategy:
