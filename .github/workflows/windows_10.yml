@@ -1,0 +1,175 @@
+name: Windows 10 Legacy Build
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build-win10-legacy:
+    runs-on: windows-2019
+    env:
+      BUILD_TYPE: Release
+      flexbison-branch: 'v2.5.25'
+      sdl2-branch: 'release-2.32.8'
+      openal-soft-branch: '1.24.3'
+      curl-version: '8_12_1'
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    ###
+    # Flex/Bison
+    ###
+    - name: Cache Flex/Bison
+      id: cache-flexbison
+      uses: actions/cache@v4
+      with:
+        path: 'thirdparties/winflexbison-install'
+        key: ${{ runner.os }}-win32-flexbison-${{ env.flexbison-branch }}-v1
+
+    - name: Install Flex/Bison
+      if: steps.cache-flexbison.outputs.cache-hit != 'true'
+      run: |
+        mkdir thirdparties
+        cd thirdparties
+        git clone --depth 1 --single-branch --branch ${{ env.flexbison-branch }} https://github.com/lexxmark/winflexbison.git
+        cmake -B winflexbison-build -DCMAKE_INSTALL_PREFIX='${{github.workspace}}/thirdparties/winflexbison-install' ./winflexbison
+        cmake --build winflexbison-build --config Release --parallel
+        cmake --install winflexbison-build --config Release
+
+    ###
+    # SDL2
+    ###
+    - name: Cache SDL2
+      id: cache-sdl2
+      uses: actions/cache@v4
+      with:
+        path: 'thirdparties/SDL2/install'
+        key: ${{ runner.os }}-win32-sdl2-${{ env.sdl2-branch }}-v1
+
+    - name: Checkout SDL2
+      if: steps.cache-sdl2.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: 'libsdl-org/SDL'
+        path: 'thirdparties/SDL2'
+        ref: '${{ env.sdl2-branch }}'
+
+    - name: Configure and install SDL2
+      if: steps.cache-sdl2.outputs.cache-hit != 'true'
+      working-directory: ${{github.workspace}}/thirdparties/SDL2
+      run: |
+        cmake -B ./build -G "Visual Studio 16 2019" -A Win32 `
+        -DCMAKE_INSTALL_PREFIX='${{github.workspace}}/thirdparties/SDL2/install'
+        cmake --build ./build --config Release --parallel
+        cmake --install ./build --config Release
+
+    ###
+    # OpenAL Soft
+    ###
+    - name: Cache OpenAL
+      id: cache-openal-soft
+      uses: actions/cache@v4
+      with:
+        path: 'thirdparties/soft-oal/install'
+        key: ${{ runner.os }}-win32-openal-soft-${{ env.openal-soft-branch }}-v1
+
+    - name: Checkout soft-oal
+      if: steps.cache-openal-soft.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: 'kcat/openal-soft'
+        path: 'thirdparties/soft-oal'
+        ref: '${{ env.openal-soft-branch }}'
+
+    - name: Configure and install soft-oal
+      if: steps.cache-openal-soft.outputs.cache-hit != 'true'
+      working-directory: ${{github.workspace}}/thirdparties/soft-oal
+      run: |
+        cmake -B ./build -G "Visual Studio 16 2019" -A Win32 `
+        -DCMAKE_INSTALL_PREFIX='${{github.workspace}}/thirdparties/soft-oal/install' `
+        -DALSOFT_BUILD_ROUTER=OFF `
+        -DALSOFT_REQUIRE_WINMM=ON `
+        -DALSOFT_REQUIRE_DSOUND=ON `
+        -DALSOFT_REQUIRE_WASAPI=ON `
+        -DCMAKE_C_FLAGS_RELEASE="/MT /O2 /Ob2 /DNDEBUG" `
+        -DCMAKE_CXX_FLAGS_RELEASE="/MT /O2 /Ob2 /DNDEBUG" `
+        -DCMAKE_C_FLAGS_MINSIZEREL="/MT /O2 /Ob2 /DNDEBUG" `
+        -DCMAKE_CXX_FLAGS_MINSIZEREL="/MT /O1 /Ob1 /DNDEBUG" `
+        -DCMAKE_C_FLAGS_RELWITHDEBINFO="/MT /Zi /O2 /Ob1 /DNDEBUG" `
+        -DCMAKE_CXX_FLAGS_RELWITHDEBINFO="/MT /Zi /O2 /Ob1 /DNDEBUG"
+        cmake --build ./build --config Release --parallel
+        cmake --install ./build --config Release
+        # Rename OpenAL32.dll to ensure it's correct if needed, but for 32-bit build it should be OpenAL32.dll
+
+    ###
+    # cURL
+    ###
+    - name: Cache cURL
+      id: cache-curl
+      uses: actions/cache@v4
+      with:
+        path: 'thirdparties/curl/install'
+        key: ${{ runner.os }}-win32-curl-${{ env.curl-version }}-v1
+
+    - name: Checkout cURL
+      if: steps.cache-curl.outputs.cache-hit != 'true'
+      uses: actions/checkout@v4
+      with:
+        repository: 'curl/curl'
+        path: 'thirdparties/curl'
+        ref: 'curl-${{ env.curl-version }}'
+
+    - name: Configure and install curl
+      if: steps.cache-curl.outputs.cache-hit != 'true'
+      working-directory: ${{github.workspace}}/thirdparties/curl
+      run: |
+        cmake -B ./build -G "Visual Studio 16 2019" -A Win32 `
+            -DCMAKE_INSTALL_PREFIX='${{github.workspace}}/thirdparties/curl/install' `
+            -DCURL_USE_LIBPSL=OFF `
+            -DCURL_USE_SCHANNEL=ON
+        cmake --build ./build --config Release --parallel
+        cmake --install ./build --config Release
+
+    ###
+    # Main Project
+    ###
+    - name: Configure Main Project
+      run: |
+        cmake -B build -G "Visual Studio 16 2019" -A Win32 `
+        -DCMAKE_BUILD_TYPE=Release `
+        -DCMAKE_INSTALL_PREFIX='${{github.workspace}}/install' `
+        -DBISON_EXECUTABLE='${{github.workspace}}/thirdparties/winflexbison-install/win_bison.exe' `
+        -DFLEX_EXECUTABLE='${{github.workspace}}/thirdparties/winflexbison-install/win_flex.exe' `
+        -DUSE_INTERNAL_SDL=OFF `
+        -DSDL2_DIR='${{github.workspace}}/thirdparties/SDL2/install/cmake' `
+        -DOPENAL_LIBRARY='${{github.workspace}}/thirdparties/soft-oal' `
+        -DOPENAL_INCLUDE_DIR='${{github.workspace}}/thirdparties/soft-oal/install/include/AL' `
+        -DCURL_ROOT='${{github.workspace}}/thirdparties/curl/install' `
+        .
+
+    - name: Build Main Project
+      run: cmake --build build --config Release --parallel
+
+    - name: Install Main Project
+      run: |
+        cmake --install build --config Release
+        New-Item -ItemType Directory '${{github.workspace}}/package' -Force
+
+        # Copy Dependencies
+        Copy-Item '${{github.workspace}}/thirdparties/SDL2/install/bin/*.dll' -Destination '${{github.workspace}}/package'
+        Copy-Item '${{github.workspace}}/thirdparties/soft-oal/install/bin/*.dll' -Destination '${{github.workspace}}/package'
+        Copy-Item '${{github.workspace}}/thirdparties/curl/install/bin/*.dll' -Destination '${{github.workspace}}/package'
+
+        # Copy Main Artifacts
+        if (Test-Path ${{github.workspace}}/install/bin) { Copy-Item '${{github.workspace}}/install/bin/*' -Include '*.dll','*.exe' -Destination '${{github.workspace}}/package' }
+        if (Test-Path ${{github.workspace}}/install/lib) { Copy-Item '${{github.workspace}}/install/lib/*' -Include '*.dll','*.exe' -Destination '${{github.workspace}}/package' }
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: openmohaa-voip-win10-legacy
+        path: ${{github.workspace}}/package
