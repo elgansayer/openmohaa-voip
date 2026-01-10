@@ -2220,6 +2220,10 @@ static ALCcontext *alContext;
 #ifdef USE_VOIP
 static ALCdevice *alCaptureDevice;
 static cvar_t *s_alCapture;
+static cvar_t *s_alCaptureSampleRate;
+static cvar_t *s_alCaptureBits;
+static cvar_t *s_alCaptureChannels;
+static cvar_t *s_alCaptureBufferSize;
 #endif
 
 #if defined(_WIN64)
@@ -2645,6 +2649,11 @@ qboolean S_AL_Init( soundInterface_t *si )
 
 #ifdef USE_VOIP
 	s_alCapture = Cvar_Get( "s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	s_alCaptureSampleRate = Cvar_Get( "s_alCaptureSampleRate", "48000", CVAR_ARCHIVE | CVAR_LATCH );
+	s_alCaptureBits = Cvar_Get( "s_alCaptureBits", "16", CVAR_ARCHIVE | CVAR_LATCH );
+	s_alCaptureChannels = Cvar_Get( "s_alCaptureChannels", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	s_alCaptureBufferSize = Cvar_Get( "s_alCaptureBufferSize", "0", CVAR_ARCHIVE | CVAR_LATCH );
+
 	if (!s_alCapture->integer)
 	{
 		Com_Printf("OpenAL capture support disabled by user ('+set s_alCapture 1' to enable)\n");
@@ -2697,12 +2706,23 @@ qboolean S_AL_Init( soundInterface_t *si )
 
 			s_alAvailableInputDevices = Cvar_Get("s_alAvailableInputDevices", inputdevicenames, CVAR_ROM | CVAR_NORESTART);
 
+			int rate = s_alCaptureSampleRate->integer;
+			int bits = s_alCaptureBits->integer;
+			int channels = s_alCaptureChannels->integer;
+			int bufferSize = s_alCaptureBufferSize->integer;
+
+			if (bufferSize <= 0) {
+				bufferSize = VOIP_MAX_PACKET_SAMPLES * 4;
+			}
+
+			ALuint format = S_AL_Format(bits / 8, channels);
+
 			Com_Printf("OpenAL default capture device is '%s'\n", defaultinputdevice ? defaultinputdevice : "none");
-			alCaptureDevice = qalcCaptureOpenDevice(inputdevice, 48000, AL_FORMAT_MONO16, VOIP_MAX_PACKET_SAMPLES*4);
+			alCaptureDevice = qalcCaptureOpenDevice(inputdevice, rate, format, bufferSize);
 			if( !alCaptureDevice && inputdevice )
 			{
 				Com_Printf( "Failed to open OpenAL Input device '%s', trying default.\n", inputdevice );
-				alCaptureDevice = qalcCaptureOpenDevice(NULL, 48000, AL_FORMAT_MONO16, VOIP_MAX_PACKET_SAMPLES*4);
+				alCaptureDevice = qalcCaptureOpenDevice(NULL, rate, format, bufferSize);
 			}
 			Com_Printf( "OpenAL capture device %s.\n",
 				    (alCaptureDevice == NULL) ? "failed to open" : "opened");
