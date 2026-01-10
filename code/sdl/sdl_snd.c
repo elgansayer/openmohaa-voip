@@ -52,6 +52,11 @@ static SDL_AudioDeviceID sdlPlaybackDevice;
 
 static SDL_AudioDeviceID sdlCaptureDevice;
 static cvar_t *s_sdlCapture;
+static cvar_t *s_sdlCaptureDevice;
+static cvar_t *s_sdlAvailableCaptureDevices;
+static cvar_t *s_sdlCaptureFreq;
+static cvar_t *s_sdlCaptureChannels;
+static cvar_t *s_sdlCaptureSamples;
 static cvar_t *s_voipLevel;
 static float sdlMasterGain = 1.0f;
 #endif
@@ -79,8 +84,28 @@ void SNDDMA_InitCapture(void)
 		return;
 	}
 
-	// !!! FIXME: some of these SDL_OpenAudioDevice() values should be cvars.
 	s_sdlCapture = Cvar_Get( "s_sdlCapture", "1", CVAR_ARCHIVE | CVAR_LATCH );
+	s_sdlCaptureDevice = Cvar_Get("s_sdlCaptureDevice", "", CVAR_ARCHIVE | CVAR_LATCH);
+	s_sdlCaptureFreq = Cvar_Get("s_sdlCaptureFreq", "48000", CVAR_ARCHIVE | CVAR_LATCH);
+	s_sdlCaptureChannels = Cvar_Get("s_sdlCaptureChannels", "1", CVAR_ARCHIVE | CVAR_LATCH);
+	s_sdlCaptureSamples = Cvar_Get("s_sdlCaptureSamples", "0", CVAR_ARCHIVE | CVAR_LATCH);
+
+	// List available capture devices
+	{
+		int count = SDL_GetNumAudioDevices(SDL_TRUE);
+		char deviceList[16384] = "";
+		int i;
+
+		for (i = 0; i < count; ++i) {
+			const char *name = SDL_GetAudioDeviceName(i, SDL_TRUE);
+			if (name) {
+				Q_strcat(deviceList, sizeof(deviceList), name);
+				Q_strcat(deviceList, sizeof(deviceList), "\n");
+			}
+		}
+		s_sdlAvailableCaptureDevices = Cvar_Get("s_sdlAvailableCaptureDevices", deviceList, CVAR_ROM | CVAR_NORESTART);
+	}
+
 	if (!s_sdlCapture->integer)
 	{
 		Com_Printf("SDL audio capture support disabled by user ('+set s_sdlCapture 1' to enable)\n");
@@ -93,19 +118,44 @@ void SNDDMA_InitCapture(void)
 #endif
 	else
 	{
-		/* !!! FIXME: list available devices and let cvar specify one, like OpenAL does */
 		SDL_AudioSpec spec;
+		const char *deviceName = s_sdlCaptureDevice->string;
+		int samples;
+
 		SDL_zero(spec);
-		spec.freq = 48000;
+		spec.freq = s_sdlCaptureFreq->integer;
 		spec.format = AUDIO_S16SYS;
-		spec.channels = 1;
-		spec.samples = VOIP_MAX_PACKET_SAMPLES * 4;
-		sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
+		spec.channels = s_sdlCaptureChannels->integer;
+
+		samples = s_sdlCaptureSamples->integer;
+		if (samples <= 0) {
+			samples = VOIP_MAX_PACKET_SAMPLES * 4;
+		}
+		spec.samples = samples;
+
+		if (deviceName && !*deviceName) {
+			deviceName = NULL;
+		}
+
+		sdlCaptureDevice = SDL_OpenAudioDevice(deviceName, SDL_TRUE, &spec, NULL, 0);
+
+		if (sdlCaptureDevice == 0 && deviceName) {
+			Com_Printf("Failed to open capture device '%s', trying default.\n", deviceName);
+			deviceName = NULL;
+			sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
+		}
+
 		// Store capture device name for UI display
-		const char *deviceName = SDL_GetAudioDeviceName(0, SDL_TRUE);
-		cvar_t *cv = Cvar_Get("s_captureDeviceName", deviceName ? deviceName : "Default Device", CVAR_ROM | CVAR_NORESTART);
-		if (cv && deviceName) {
-			Cvar_Set("s_captureDeviceName", deviceName);
+		{
+			const char *actualName = deviceName;
+			if (!actualName) {
+				const char *defName = SDL_GetAudioDeviceName(0, SDL_TRUE);
+				if (defName) actualName = defName;
+				else actualName = "Default Device";
+			}
+
+			Cvar_Get("s_captureDeviceName", actualName, CVAR_ROM | CVAR_NORESTART);
+			Cvar_Set("s_captureDeviceName", actualName);
 		}
 	}
 

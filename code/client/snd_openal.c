@@ -2648,8 +2648,6 @@ qboolean S_AL_Init( soundInterface_t *si )
 	qalSpeedOfSound( s_alDopplerSpeed->value );
 
 #ifdef USE_VOIP
-	// !!! FIXME: add support for capture device enumeration.
-	// !!! FIXME: add some better error reporting.
 	s_alCapture = Cvar_Get( "s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	s_alCaptureSampleRate = Cvar_Get( "s_alCaptureSampleRate", "48000", CVAR_ARCHIVE | CVAR_LATCH );
 	s_alCaptureBits = Cvar_Get( "s_alCaptureBits", "16", CVAR_ARCHIVE | CVAR_LATCH );
@@ -2699,6 +2697,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 			{
 				while((curlen = strlen(inputdevicelist)))
 				{
+					Com_Printf("OpenAL Capture Device: %s\n", inputdevicelist);
 					Q_strcat(inputdevicenames, sizeof(inputdevicenames), inputdevicelist);
 					Q_strcat(inputdevicenames, sizeof(inputdevicenames), "\n");
 					inputdevicelist += curlen + 1;

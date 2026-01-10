@@ -996,7 +996,7 @@ void CL_WritePacket( void ) {
 		if((clc.voipFlags & VOIP_SPATIAL) || Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1))
 		{
 			// Bandwidth Control: sv_voipEncapsulation
-			// Default 1: Send every frame (20ms)
+			// Default 1: Send every frame (60ms)
 			// > 1: Bundle 'n' frames before sending to reduce packet overhead
 			int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
 			if (encapsulation <= 0) encapsulation = 1;
