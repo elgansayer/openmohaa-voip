@@ -805,25 +805,83 @@ void UIMultiLineEdit::PasteSelection(void)
         return;
     }
 
+    if (!m_edit) {
+        return;
+    }
+
     sel = clipboardData;
 
     DeleteSelection();
+    m_changed = true;
 
-    for (i = 0; i < sel.length(); i++) {
-        if (sel[i] == '\n') {
-            CharEvent('\r');
-        } else if (sel[i] == '\r') {
-            // Changed in OPM:
-            // NOP, drop CR characters.
-            // On Linux/Mac they aren't present anyway,
-            // on Windows we already have LF chars next to them.
-            // The filtering for CR on the Windows side was originally done
-            // in Sys_GetWholeClipboard with a "manual" selective strcpy,
-            // but here we iterate over all characters of the clipboard anyways,
-            // so this feels like a better place to do the filtering.
-        } else {
-            CharEvent(sel[i]); // FIXME: this is VERY slow and jams up the EventQueue!
+    str& currentLine = LineFromLineNumber(m_selection.begin.line, false);
+    if (!m_lines.IsCurrentValid()) {
+        return;
+    }
+
+    int col = m_selection.begin.column;
+    if (col > currentLine.length()) {
+        col = currentLine.length();
+    }
+
+    str post;
+    if (col < currentLine.length()) {
+        post = str(currentLine, col, currentLine.length());
+        currentLine.CapLength(col);
+    }
+
+    str         build;
+    const char *raw         = sel.c_str();
+    const char *p           = raw;
+    const char *chunk_start = p;
+    bool        firstLine   = true;
+
+    while (*p) {
+        if (*p == '\r') {
+            if (p > chunk_start) {
+                build.append(str(chunk_start, (size_t)(p - chunk_start)));
+            }
+            chunk_start = p + 1;
+        } else if (*p == '\n') {
+            if (p > chunk_start) {
+                build.append(str(chunk_start, (size_t)(p - chunk_start)));
+            }
+
+            if (firstLine) {
+                currentLine += build;
+                firstLine = false;
+            } else {
+                m_lines.InsertAfterCurrent(build);
+                m_lines.IterateNext();
+                m_selection.begin.line++;
+            }
+            build       = "";
+            chunk_start = p + 1;
         }
+        p++;
+    }
+
+    if (p > chunk_start) {
+        build.append(str(chunk_start, (size_t)(p - chunk_start)));
+    }
+
+    if (firstLine) {
+        currentLine += build;
+        m_selection.begin.column += build.length();
+        currentLine += post;
+    } else {
+        str finalLine = build + post;
+        m_lines.InsertAfterCurrent(finalLine);
+        m_lines.IterateNext();
+        m_selection.begin.line++;
+        m_selection.begin.column = build.length();
+    }
+
+    m_selection.end = m_selection.begin;
+
+    if (m_vertscroll) {
+        m_vertscroll->setNumItems(m_lines.getCount());
+        EnsureSelectionPointVisible(m_selection.end);
     }
 }
 
