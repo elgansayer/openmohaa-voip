@@ -2687,8 +2687,6 @@ qboolean S_AL_Init( soundInterface_t *si )
 			const char *inputdevicelist;
 			const char *defaultinputdevice;
 			int curlen;
-			int rate, bits, channels, bufferSize;
-			ALuint format;
 
 			capture_ext = qtrue;
 
@@ -2709,16 +2707,16 @@ qboolean S_AL_Init( soundInterface_t *si )
 
 			s_alAvailableInputDevices = Cvar_Get("s_alAvailableInputDevices", inputdevicenames, CVAR_ROM | CVAR_NORESTART);
 
-			rate = s_alCaptureSampleRate->integer;
-			bits = s_alCaptureBits->integer;
-			channels = s_alCaptureChannels->integer;
-			bufferSize = s_alCaptureBufferSize->integer;
+			int rate = s_alCaptureSampleRate->integer;
+			int bits = s_alCaptureBits->integer;
+			int channels = s_alCaptureChannels->integer;
+			int bufferSize = s_alCaptureBufferSize->integer;
 
 			if (bufferSize <= 0) {
 				bufferSize = VOIP_MAX_PACKET_SAMPLES * 4;
 			}
 
-			format = S_AL_Format(bits / 8, channels);
+			ALuint format = S_AL_Format(bits / 8, channels);
 
 			Com_Printf("OpenAL default capture device is '%s'\n", defaultinputdevice ? defaultinputdevice : "none");
 			alCaptureDevice = qalcCaptureOpenDevice(inputdevice, rate, format, bufferSize);
