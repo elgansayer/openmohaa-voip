@@ -988,73 +988,9 @@ void CL_WritePacket( void ) {
 	}
 
 #ifdef USE_VOIP
-	if (clc.voipOutgoingDataSize > 0)
-	{
-		Com_Printf("VoIP CLIENT: Attempting to send packet (size=%d, flags=%d, spatial=%d)\n",
-			clc.voipOutgoingDataSize, clc.voipFlags, !!(clc.voipFlags & VOIP_SPATIAL));
-			
-		if((clc.voipFlags & VOIP_SPATIAL) || Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1))
-		{
-			// Bandwidth Control: sv_voipEncapsulation
-			// Default 1: Send every frame (60ms)
-			// > 1: Bundle 'n' frames before sending to reduce packet overhead
-			int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
-			if (encapsulation <= 0) encapsulation = 1;
-
-			// Check for flush timeout
-            qboolean forceFlush = (cls.realtime > clc.voipFlushTime);
-
-			// If we haven't buffered enough frames yet, and buffer isn't dangerously full, wait.
-			if (!forceFlush && 
-                clc.voipOutgoingDataFrames < encapsulation && 
-				clc.voipOutgoingDataSize < sizeof(clc.voipOutgoingData) - 200) {
-				// Keep buffering
-			} else {
-				Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes, %d frames)\n", 
-					clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
-				MSG_WriteByte (&buf, clc_voipOpus);
-				MSG_WriteByte (&buf, clc.voipOutgoingGeneration);
-				MSG_WriteLong (&buf, clc.voipOutgoingSequence);
-				MSG_WriteByte (&buf, clc.voipOutgoingDataFrames);
-                // REDUNDANT: Targets and Flags are calculated by Server based on cl_voipSendTarget
-                // MSG_WriteData (&buf, clc.voipTargets, sizeof(clc.voipTargets));
-				// MSG_WriteByte(&buf, clc.voipFlags);
-				MSG_WriteShort (&buf, clc.voipOutgoingDataSize);
-				MSG_WriteData (&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
-
-				// If we're recording a demo, we have to fake a server packet...
-				if(clc.demorecording && !clc.demowaiting)
-				{
-					const int voipSize = clc.voipOutgoingDataSize;
-					msg_t fakemsg;
-					byte fakedata[MAX_MSGLEN];
-					MSG_Init (&fakemsg, fakedata, sizeof (fakedata));
-					MSG_Bitstream (&fakemsg);
-					MSG_WriteLong (&fakemsg, clc.reliableAcknowledge);
-					MSG_WriteByte (&fakemsg, svc_voipOpus);
-					MSG_WriteShort (&fakemsg, clc.clientNum);
-					MSG_WriteByte (&fakemsg, clc.voipOutgoingGeneration);
-					MSG_WriteLong (&fakemsg, clc.voipOutgoingSequence);
-					MSG_WriteByte (&fakemsg, clc.voipOutgoingDataFrames);
-					MSG_WriteShort (&fakemsg, clc.voipOutgoingDataSize );
-					MSG_WriteBits (&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
-					MSG_WriteData (&fakemsg, clc.voipOutgoingData, voipSize);
-					MSG_WriteByte (&fakemsg, svc_EOF);
-					CL_WriteDemoMessage (&fakemsg, 0);
-				}
-
-				clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
-				clc.voipOutgoingDataSize = 0;
-				clc.voipOutgoingDataFrames = 0;
-			}
-		}
-		else
-		{
-			// We have data, but no targets. Silently discard all data
-			clc.voipOutgoingDataSize = 0;
-			clc.voipOutgoingDataFrames = 0;
-		}
-	}
+	// RFC 6716: VoIP transmission is now handled by CL_FlushVoipOutgoingBuffer()
+	// in cl_main.cpp, decoupled from game tick (sv_fps 20Hz)
+	// This ensures 60ms frames are sent at proper intervals regardless of FPS
 #endif
 
 	if ( count >= 1 ) {

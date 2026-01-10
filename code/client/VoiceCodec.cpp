@@ -40,7 +40,10 @@ bool VoiceCodec::Init() {
 	// Set expected packet loss percentage (10%)
 	opus_encoder_ctl(encoder, OPUS_SET_PACKET_LOSS_PERC(10));
 	
-	Com_Printf("VoiceCodec: Initialised with FEC enabled (10%% packet loss tolerance)\n");
+	// Enable DTX for bandwidth efficiency during silence (RFC 6716 Section 2.1.8)
+	opus_encoder_ctl(encoder, OPUS_SET_DTX(1));
+	
+	Com_Printf("VoiceCodec: Initialised with FEC and DTX enabled (RFC 6716 compliant)\n");
 	
 	initialized = true;
 	return true;

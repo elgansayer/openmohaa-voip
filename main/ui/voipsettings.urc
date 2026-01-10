@@ -6,10 +6,6 @@ menu "voipsettings" 480 480 from_top 0.1
     title "VoIP Settings"
 }
 
-// ----------------------------------------------------
-// Microphone Input
-// ----------------------------------------------------
-
 resource Label {
     name "device_label"
     rect 10 40 100 18
@@ -64,10 +60,6 @@ resource Slider {
     max 4.0
 }
 
-// ----------------------------------------------------
-// Volume / Audio Processing
-// ----------------------------------------------------
-
 resource Label {
     name "audio_title"
     rect 10 115 460 18
@@ -121,11 +113,6 @@ resource Slider {
     max 64000
 }
 
-
-// ----------------------------------------------------
-// General Controls
-// ----------------------------------------------------
-
 resource Label {
     name "controls_title"
     rect 10 220 460 18
@@ -152,9 +139,6 @@ resource Label {
     title "Loopback Test (Echo):"
 }
 
-// ----------------------------------------------------
-// Voice Activation (VAD)
-// ----------------------------------------------------
 resource Label {
     name "vad_enable_label"
     rect 10 225 180 20
@@ -181,9 +165,6 @@ resource Slider {
     linkcvar "cl_voipVADThreshold"
 }
 
-// ----------------------------------------------------
-// Loopback
-// ----------------------------------------------------
 resource CheckBox {
     name "voip_echo_checkbox"
     rect 200 270 20 20
@@ -202,9 +183,6 @@ resource CheckBox {
     linkcvar "cl_voipLoopback"
 }
 
-// ----------------------------------------------------
-// Targeting
-// ----------------------------------------------------
 resource Label {
     name "voip_target_label"
     rect 10 345 180 20

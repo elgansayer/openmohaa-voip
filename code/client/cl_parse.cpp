@@ -843,9 +843,10 @@ void JB_Reset(int i) {
 	clc.voipJitterBuffers[i].currentGeneration = -1;
 	clc.voipJitterBuffers[i].lastSequencePop = -1;
 	clc.voipJitterBuffers[i].drift = 0;
+	clc.voipJitterBuffers[i].lastPacketTime = 0;
 }
 
-static void JB_Push(int i, const unsigned char *data, int len, int seq, int gen, int frames) {
+static void JB_Push(int i, const unsigned char *data, int len, int seq, int gen, int frames, int flags) {
 	jitterBuffer_t *jb = &clc.voipJitterBuffers[i];
 	int idx;
 	
@@ -868,6 +869,7 @@ static void JB_Push(int i, const unsigned char *data, int len, int seq, int gen,
 	jb->packets[idx].sequence = seq;
 	jb->packets[idx].generation = gen;
 	jb->packets[idx].frames = frames;
+	jb->packets[idx].flags = flags;
 	jb->packets[idx].recvTime = cls.realtime;
 	
 	jb->writeIndex = (jb->writeIndex + 1) % JB_PACKET_QUEUE_SIZE;
@@ -944,92 +946,72 @@ void CL_RunVoipJitterBuffer( void ) {
 		jitterBuffer_t *jb = &clc.voipJitterBuffers[i];
 		if (jb->count == 0 && jb->lastSequencePop == -1) continue; // Nothing happening
 
-        // RFC 6716 Logic: 60ms framing.
-        // We want to pull at most one "packet" worth of time per frame?
-        // No, we want to play whatever is due.
-        // Simple logic:
-        // If we have packets, check the sequence.
-        // expectedSeq = jb->lastSequencePop + (last packet's frame count);
-        
-        // Wait, packets can have multiple frames.
-        
+        // RFC 6716: 60ms framing with adaptive playout
         voipPacket_t *pkt = JB_GetNextPacket(i);
         
         if (!pkt) {
-             // Buffer empty. 
-             // Do we validly expect data? (DTX handling?)
-             // Use Opus PLC if we are "in a stream" (generation match)
-             // But for now, just return. (Silence)
+             // Buffer empty - check for DTX vs packet loss
+             if (jb->lastPacketTime > 0 && (cls.realtime - jb->lastPacketTime) > 200) {
+                 // Likely DTX (silence period), not loss
+                 continue;
+             }
+             
+             // FEC Recovery: If we have a gap and next packet with FEC data
+             voipPacket_t *nextPkt = JB_GetNextPacket(i);
+             if (nextPkt && clc.voiceCodec) {
+                 // Try to recover lost frame using FEC from next packet
+                 int numSamples = clc.voiceCodec->Decode(i, nextPkt->data, nextPkt->length, 
+                                                         decoded, ARRAY_LEN(decoded), qtrue); // decode_fec=true
+                 if (numSamples > 0) {
+                     Com_DPrintf("VoIP: FEC recovered %d samples for client %d\n", numSamples, i);
+                     CL_PlayVoip(i, numSamples, (const byte *)decoded, VOIP_SPATIAL);
+                     clc.voipLastPacketTime[i] = cls.realtime;
+                 }
+             }
              continue;
         }
         
-        // Simple Jitter Buffer Logic:
-		// If we have just started (lastSequencePop == -1), wait until we have X ms buffered?
-		// RFC requirement is robust playout.
-		// Let's buffer at least 2 packets (approx 120ms) before starting?
-        const int TARGET_BUFFER_COUNT = 2; 
-
-		if (jb->lastSequencePop == -1 && jb->count < TARGET_BUFFER_COUNT) {
-			continue; // buffering
-		}
+        // Adaptive Playout: Wait until we have TARGET_BUFFER_COUNT packets buffered
+        const int TARGET_BUFFER_COUNT = 1; // 60ms buffering
+        if (jb->lastSequencePop == -1 && jb->count < TARGET_BUFFER_COUNT) {
+            continue; // Wait for initial buffering
+        }
 		
-        // Ok, we are playing.
-        // Is it time? 
-        // We should just play as fast as we can consume? No, effectively the S_RawSample will queue.
-        // But we don't want to overflow the Audio Hardware Buffer.
-        // So we should feed it based on TIME?
+        // Timing: Only decode if enough time has passed (decouples from game tick)
+        int packetDuration = 60; // ms (RFC 6716 standard frame duration)
         
-		// Current approach: Feed 1 packet per frame? 
-		// That depends on Server framerate (20Hz = 50ms) vs Packet Size (60ms).
-		// If we feed 60ms every 50ms, we will overflow!
-		// We need to feed ONLY if enough time has passed.
-		
-		// Use clc.voipLastPacketTime[i] as "Last Playout Time"
-		// If (cls.realtime - lastPlayoutTime > packetDuration) -> Play
-		
-        // Assuming 60ms packets:
-        int packetDuration = 60; // ms
+        // Adaptive drift correction
+        if (jb->lastPacketTime > 0) {
+            int expectedTime = jb->lastPacketTime + packetDuration;
+            int drift = cls.realtime - expectedTime;
+            
+            // If we're drifting ahead (buffer underrun risk), slow down slightly
+            if (drift < -10) {
+                packetDuration += 5; // Add small delay
+            }
+            // If we're drifting behind (buffer overrun risk), speed up slightly
+            else if (drift > 10) {
+                packetDuration -= 5; // Reduce delay
+            }
+        }
+        
         if (cls.realtime - clc.voipLastPacketTime[i] < packetDuration) {
-            continue; // Not time yet.
+            continue; // Not time yet
         }
 		
         // Process the packet
 		int written = 0;
 		int frames = pkt->frames;
+		int flags = pkt->flags; // Use flags stored in packet
 		
-		// Check sequence
-		int expectedSeq; 
-        if(jb->lastSequencePop == -1) expectedSeq = pkt->sequence;
-        else expectedSeq = jb->lastSequencePop + frames; // Should be + frames of PREVIOUS packet... this is tricky.
-        // Actually, Sequence numbers in Opus are usually sample counts or frame counts?
-        // In this implementation:
-        // clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
-        // So sequence is Frame Count.
-        
-        // Wait, if I pop a packet with 3 frames, next sequence should be +3.
-        // So expectedSeq = jb->lastSequencePop + (frames_of_popped_packet)
-        // We need to store that.
-        // Simplified: expectedSeq = pkt->sequence (Wait, NO!)
-        
-        // Let's just trust valid packets for now.
-        // If (pkt->sequence != expectedSeq) -> Lost Packet -> PLC
-        
-        // Decoding
+        // Decode all frames in packet
         int readPos = 0;
-        int flags = 0; // Where to get flags? They were passed in CL_ParseVoip... stashed in packet?
-        // We forgot to store flags! 
-        // Assume default (VOIP_SPATIAL | VOIP_DIRECT) or just use logic in CL_PlayVoip
-        // For now, assume Spatial as default?
-        // Actually flags are usually sent in the packet header.
-        // We should add flags to voipPacket_t
-        // But for now, let's hardcode a sensible default or fetch from cvar
-        flags = VOIP_SPATIAL; // Default
-        
         for (int f = 0; f < frames; f++) {
             int frameLen = pkt->data[readPos] | (pkt->data[readPos+1] << 8);
             readPos += 2;
             
-            int numSamples = clc.voiceCodec->Decode(i, pkt->data + readPos, frameLen, decoded + written, ARRAY_LEN(decoded) - written, qfalse);
+            int numSamples = clc.voiceCodec->Decode(i, pkt->data + readPos, frameLen, 
+                                                    decoded + written, ARRAY_LEN(decoded) - written, qfalse);
             if (numSamples > 0) written += numSamples;
             readPos += frameLen;
         }
@@ -1037,6 +1019,7 @@ void CL_RunVoipJitterBuffer( void ) {
         if (written > 0) {
             CL_PlayVoip(i, written, (const byte *)decoded, flags);
             clc.voipLastPacketTime[i] = cls.realtime;
+            jb->lastPacketTime = cls.realtime; // Track for adaptive playout
         }
         
         jb->lastSequencePop = pkt->sequence;
@@ -1089,7 +1072,7 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 	MSG_ReadData(msg, encoded, packetsize);
 
 	// Store in Jitter Buffer
-	JB_Push(sender, encoded, packetsize, sequence, generation, frames);
+	JB_Push(sender, encoded, packetsize, sequence, generation, frames, flags);
 }
 #endif
 

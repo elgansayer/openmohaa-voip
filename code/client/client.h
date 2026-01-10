@@ -183,6 +183,7 @@ typedef struct {
 	int		sequence;
 	int		generation;
 	int		frames;
+	int		flags; // VOIP_SPATIAL | VOIP_DIRECT
 	int		recvTime; // Realtime when received
 } voipPacket_t;
 
@@ -194,6 +195,7 @@ typedef struct {
 	int				currentGeneration;
 	int				lastSequencePop; // Last sequence number that was popped
 	float			drift; // Timing drift estimate
+	int				lastPacketTime; // For drift calculation
 } jitterBuffer_t;
 #endif
 

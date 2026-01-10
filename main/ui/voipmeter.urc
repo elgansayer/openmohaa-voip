@@ -1,14 +1,8 @@
-// VoIP Audio Input Meter
-// This menu displays a small vertical bar that responds to microphone input level
-// Shows when VAD is active OR when +voiprecord is pressed
-
 menu "voipmeter" 64 220 NONE 1
 bgcolor 0 0 0 0
 fgcolor 1 1 1 1
 align left bottom
 
-//==================================================
-    // Audio Level Backdrop
     resource
     Label
     {
@@ -20,8 +14,6 @@ align left bottom
     shader textures/hud/healthback
     }
 
-    //==================================================
-    // Audio Level Meter
     resource
     Label
     {
@@ -36,8 +28,6 @@ align left bottom
     statbar_shader_flash textures/hud/healthmeterflash
     }
 
-    //==================================================
-    // Label
     resource
     Label
     {

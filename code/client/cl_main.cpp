@@ -2819,6 +2819,87 @@ void CL_WriteVoipPacket( const byte *data, int len ) {
 	}
 }
 
+/*
+===================
+CL_FlushVoipOutgoingBuffer
+
+RFC 6716 Compliance: Decouple VoIP transmission from game tick
+Transmits buffered VoIP data based on 60ms timing, not sv_fps
+===================
+*/
+void CL_FlushVoipOutgoingBuffer(void) {
+	if (clc.voipOutgoingDataSize == 0) {
+		return; // Nothing to send
+	}
+	
+	if (!(clc.voipFlags & VOIP_SPATIAL) && !Com_IsVoipTarget(clc.voipTargets, sizeof(clc.voipTargets), -1)) {
+		// No targets, discard data
+		clc.voipOutgoingDataSize = 0;
+		clc.voipOutgoingDataFrames = 0;
+		return;
+	}
+	
+	// Bandwidth Control: sv_voipEncapsulation (frame bundling)
+	int encapsulation = Cvar_VariableIntegerValue("sv_voipEncapsulation");
+	if (encapsulation <= 0) encapsulation = 1;
+	
+	// RFC 6716: Force flush after 60ms to maintain frame timing
+	qboolean forceFlush = (cls.realtime >= clc.voipFlushTime);
+	
+	// Only send if we have enough frames OR timeout reached
+	if (!forceFlush && clc.voipOutgoingDataFrames < encapsulation && 
+	    clc.voipOutgoingDataSize < sizeof(clc.voipOutgoingData) - 200) {
+		return; // Keep buffering
+	}
+	
+	// Build VoIP packet
+	msg_t buf;
+	byte data[MAX_MSGLEN];
+	MSG_Init(&buf, data, sizeof(data));
+	MSG_Bitstream(&buf);
+	
+	MSG_WriteByte(&buf, clc_voipOpus);
+	MSG_WriteByte(&buf, clc.voipOutgoingGeneration);
+	MSG_WriteLong(&buf, clc.voipOutgoingSequence);
+	MSG_WriteByte(&buf, clc.voipOutgoingDataFrames);
+	MSG_WriteShort(&buf, clc.voipOutgoingDataSize);
+	MSG_WriteData(&buf, clc.voipOutgoingData, clc.voipOutgoingDataSize);
+	
+	Com_Printf("VoIP CLIENT: SENDING packet to server (%d bytes, %d frames)\n", 
+		clc.voipOutgoingDataSize, clc.voipOutgoingDataFrames);
+	
+	// Send to server via reliable channel
+	CL_Netchan_Transmit(&clc.netchan, &buf);
+	
+	// Demo recording support
+	if (clc.demorecording && !clc.demowaiting) {
+		const int voipSize = clc.voipOutgoingDataSize;
+		msg_t fakemsg;
+		byte fakedata[MAX_MSGLEN];
+		MSG_Init(&fakemsg, fakedata, sizeof(fakedata));
+		MSG_Bitstream(&fakemsg);
+		MSG_WriteLong(&fakemsg, clc.reliableAcknowledge);
+		MSG_WriteByte(&fakemsg, svc_voipOpus);
+		MSG_WriteShort(&fakemsg, clc.clientNum);
+		MSG_WriteByte(&fakemsg, clc.voipOutgoingGeneration);
+		MSG_WriteLong(&fakemsg, clc.voipOutgoingSequence);
+		MSG_WriteByte(&fakemsg, clc.voipOutgoingDataFrames);
+		MSG_WriteShort(&fakemsg, clc.voipOutgoingDataSize);
+		MSG_WriteBits(&fakemsg, clc.voipFlags, VOIP_FLAGCNT);
+		MSG_WriteData(&fakemsg, clc.voipOutgoingData, voipSize);
+		MSG_WriteByte(&fakemsg, svc_EOF);
+		CL_WriteDemoMessage(&fakemsg, 0);
+	}
+	
+	// Update sequence and reset buffers
+	clc.voipOutgoingSequence += clc.voipOutgoingDataFrames;
+	clc.voipOutgoingDataSize = 0;
+	clc.voipOutgoingDataFrames = 0;
+	
+	// Set next flush time to maintain 60ms cadence
+	clc.voipFlushTime = cls.realtime + 60;
+}
+
 void CL_VoipFrame(void) {
 	if (!cl_voip || !cl_voip->integer) {
 		clc.voipPower = 0;
@@ -3063,6 +3144,9 @@ void CL_VoipFrame(void) {
 		// Keep capture running so the HUD metre works even when not transmitting (for testing mic).
 		// S_StopCapture(); 
 	}
+	
+	// RFC 6716: Flush VoIP packets based on 60ms timing, not game tick
+	CL_FlushVoipOutgoingBuffer();
 }
 #endif
 
