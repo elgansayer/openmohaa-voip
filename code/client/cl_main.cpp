@@ -137,7 +137,7 @@ cvar_t *cl_voip = NULL;
 cvar_t *cl_voipSend = NULL;
 cvar_t *voip_bitrate = NULL;
 cvar_t *cl_voipLoopback = NULL;
-cvar_t *cl_voipScale = NULL; // formerly cl_voipCaptureMult
+cvar_t *s_alCaptureMult = NULL; // ioquake3 parity
 cvar_t *cl_voipGainDuringCapture = NULL;
 cvar_t *s_volumeVoice = NULL;
 cvar_t *cl_voipShowMeter = NULL;
@@ -1299,104 +1299,72 @@ void CL_Disconnect_f( void );
 CL_VoipMute_f
 ==================
 */
-void CL_VoipMute_f(void) {
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: cl_voipMute <clientNum>\n");
-        return;
-    }
-
-    int clientNum = atoi(Cmd_Argv(1));
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        Com_Printf("Invalid client number.\n");
-        return;
-    }
-
-    clc.voipIgnore[clientNum] = qtrue;
-    Com_Printf("Muted client %d\n", clientNum);
-}
-
 /*
 ==================
-CL_VoipUnmute_f
+CL_Voip_f
 ==================
 */
-void CL_VoipUnmute_f(void) {
-    if (Cmd_Argc() != 2) {
-        Com_Printf("Usage: cl_voipUnmute <clientNum>\n");
+void CL_Voip_f(void) {
+    if (Cmd_Argc() < 2) {
+        Com_Printf("Usage: voip <cmd> [params]\n");
+        Com_Printf("Commands: mute, unmute, muteall, unfocus, gain, list\n");
         return;
     }
 
-    int clientNum = atoi(Cmd_Argv(1));
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        Com_Printf("Invalid client number.\n");
-        return;
-    }
+    char *cmd = Cmd_Argv(1);
 
-    clc.voipIgnore[clientNum] = qfalse;
-    Com_Printf("Unmuted client %d\n", clientNum);
-}
-
-/*
-==================
-CL_VoipGain_f
-==================
-*/
-void CL_VoipGain_f(void) {
-    if (Cmd_Argc() != 3) {
-        Com_Printf("Usage: cl_voipGain <clientNum> <gain>\n");
-        return;
-    }
-
-    int clientNum = atoi(Cmd_Argv(1));
-    float gain = atof(Cmd_Argv(2));
-
-    if (clientNum < 0 || clientNum >= MAX_CLIENTS) {
-        Com_Printf("Invalid client number.\n");
-        return;
-    }
-    
-    if (gain < 0.0f) gain = 0.0f;
-    if (gain > 10.0f) gain = 10.0f; // Cap it reasonable
-
-    clc.voipGain[clientNum] = gain;
-    Com_Printf("Set gain for client %d to %.2f\n", clientNum, gain);
-}
-
-/*
-==================
-CL_VoipListMuted_f
-==================
-*/
-void CL_VoipListMuted_f(void) {
-    int i;
-    int mutedCount = 0;
-    
-    Com_Printf("VoIP Muted Clients:\n");
-    Com_Printf("-------------------\n");
-    
-    for (i = 0; i < MAX_CLIENTS; i++) {
-        if (clc.voipIgnore[i]) {
-            Com_Printf("  Client %d: MUTED (gain: %.2f)\n", i, clc.voipGain[i]);
-            mutedCount++;
+    if (!Q_stricmp(cmd, "mute")) {
+        if (Cmd_Argc() != 3) {
+            Com_Printf("Usage: voip mute <clientNum>\n");
+            return;
         }
+        int clientNum = atoi(Cmd_Argv(2));
+        if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
+        clc.voipIgnore[clientNum] = qtrue;
+        Com_Printf("Muted client %d\n", clientNum);
+    } 
+    else if (!Q_stricmp(cmd, "unmute")) {
+        if (Cmd_Argc() != 3) {
+            Com_Printf("Usage: voip unmute <clientNum>\n");
+            return;
+        }
+        int clientNum = atoi(Cmd_Argv(2));
+        if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
+        clc.voipIgnore[clientNum] = qfalse;
+        Com_Printf("Unmuted client %d\n", clientNum);
     }
-    
-    if (mutedCount == 0) {
-        Com_Printf("  No clients are currently muted.\n");
-    } else {
-        Com_Printf("-------------------\n");
-        Com_Printf("Total muted: %d\n", mutedCount);
+    else if (!Q_stricmp(cmd, "muteall")) {
+        clc.voipMuteAll = !clc.voipMuteAll;
+        Com_Printf("VoIP mute all: %s\n", clc.voipMuteAll ? "ON" : "OFF");
     }
-}
-
-/*
-==================
-CL_VoipMuteAll_f
-==================
-*/
-void CL_VoipMuteAll_f(void) {
-    clc.voipMuteAll = !clc.voipMuteAll;
-    Com_Printf("VoIP mute all: %s\n", clc.voipMuteAll ? "ON" : "OFF");
+    else if (!Q_stricmp(cmd, "gain")) {
+        if (Cmd_Argc() != 4) {
+            Com_Printf("Usage: voip gain <clientNum> <gain>\n");
+            return;
+        }
+        int clientNum = atoi(Cmd_Argv(2));
+        float gain = atof(Cmd_Argv(3));
+        if (clientNum < 0 || clientNum >= MAX_CLIENTS) return;
+        if (gain < 0.0f) gain = 0.0f;
+        if (gain > 10.0f) gain = 10.0f;
+        clc.voipGain[clientNum] = gain;
+        Com_Printf("Set gain for client %d to %.2f\n", clientNum, gain);
+    }
+    else if (!Q_stricmp(cmd, "list")) {
+        int i, count = 0;
+        Com_Printf("VoIP Status:\n");
+        Com_Printf("Mute All: %s\n", clc.voipMuteAll ? "ON" : "OFF");
+        for (i = 0; i < MAX_CLIENTS; i++) {
+            if (clc.voipIgnore[i] || clc.voipGain[i] != 1.0f) {
+                Com_Printf("Client %d: %s (Gain: %.2f)\n", i, clc.voipIgnore[i] ? "MUTED" : "ACTIVE", clc.voipGain[i]);
+                count++;
+            }
+        }
+        if (!count) Com_Printf("No custom settings.\n");
+    }
+    else {
+        Com_Printf("Unknown voip command: %s\n", cmd);
+    }
 }
 void CL_Disconnect_f( void ) {
 	qboolean bConsoleState;
@@ -2904,8 +2872,8 @@ void CL_VoipFrame(void) {
     if (!cl_voipVADThreshold) {
         cl_voipVADThreshold = Cvar_Get("cl_voipVADThreshold", "0.05", CVAR_ARCHIVE);
     }
-    if (!cl_voipScale) {
-        cl_voipScale = Cvar_Get("cl_voipScale", "1.0", CVAR_ARCHIVE);
+    if (!s_alCaptureMult) {
+        s_alCaptureMult = Cvar_Get("s_alCaptureMult", "2.0", CVAR_ARCHIVE);
     }
     if (!cl_voipGainDuringCapture) {
         cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
@@ -4031,7 +3999,7 @@ void CL_Init( void ) {
     voip_bitrate = Cvar_Get("voip_bitrate", "32000", CVAR_ARCHIVE);
 	Cvar_Get("cl_voipEcho", "0", CVAR_ARCHIVE); // 1 = play back to self
 	cl_voipLoopback = Cvar_Get("cl_voipLoopback", "0", CVAR_ARCHIVE); // 1 = play back to self via server return
-    cl_voipScale = Cvar_Get("cl_voipScale", "1.0", CVAR_ARCHIVE);
+    s_alCaptureMult = Cvar_Get("s_alCaptureMult", "2.0", CVAR_ARCHIVE);
     cl_voipGainDuringCapture = Cvar_Get("cl_voipGainDuringCapture", "0.2", CVAR_ARCHIVE);
     cl_voipShowMeter = Cvar_Get("cl_voipShowMeter", "0", CVAR_ARCHIVE);
     cl_voipSendTarget = Cvar_Get("cl_voipSendTarget", "spatial", CVAR_ARCHIVE);
@@ -4151,11 +4119,7 @@ void CL_Init( void ) {
 	Cmd_AddCommand ("snd_restart", CL_Snd_Restart_f);
 	Cmd_AddCommand ("vid_restart", CL_Vid_Restart_f);
 	Cmd_AddCommand ("disconnect", CL_Disconnect_f);
-	Cmd_AddCommand ("cl_voipMute", CL_VoipMute_f);
-	Cmd_AddCommand ("cl_voipUnmute", CL_VoipUnmute_f);
-    Cmd_AddCommand ("cl_voipGain", CL_VoipGain_f);
-    Cmd_AddCommand ("cl_voipListMuted", CL_VoipListMuted_f);
-    Cmd_AddCommand ("cl_voipMuteAll", CL_VoipMuteAll_f);
+	Cmd_AddCommand ("voip", CL_Voip_f);
 	Cmd_AddCommand ("record", CL_Record_f);
 	Cmd_AddCommand ("demo", CL_PlayDemo_f);
 	Cmd_AddCommand ("cinematic", CL_PlayCinematic_f);

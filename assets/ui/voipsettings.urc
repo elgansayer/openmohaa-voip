@@ -59,7 +59,7 @@ resource Slider {
     name "mic_gain_slider"
     rect 160 85 200 18
     fgcolor 0.5 0.5 0.5 1
-    linkcvar "cl_voipScale"
+    linkcvar "s_alCaptureMult"
     min 0.0
     max 4.0
 }
@@ -226,20 +226,20 @@ resource Button {
 
 resource Label {
     name "voip_muteall_label"
-    rect 10 295 180 20
+    rect 10 320 180 20
     fgcolor 1 1 1 1
     title "Mute All Incoming:"
 }
 resource Button {
     name "voip_muteall_button"
-    rect 200 295 150 24
+    rect 200 320 150 24
     title "Toggle Mute All"
-    stuffcommand "cl_voipMuteAll"
+    stuffcommand "voip muteall"
 }
 
 resource Button {
     name "close_button"
-    rect 190 340 100 30
+    rect 190 380 100 30
     title "Close"
     stuffcommand "popmenu"
 }

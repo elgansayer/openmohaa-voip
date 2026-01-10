@@ -516,7 +516,7 @@ extern	cvar_t	*cl_voipVADThreshold;
 extern	cvar_t	*cl_voipSend;
 extern	cvar_t	*cl_voipSendTarget;
 extern	cvar_t	*cl_voipGainDuringCapture;
-extern	cvar_t	*cl_voipScale;
+extern	cvar_t	*s_alCaptureMult;
 extern	cvar_t	*cl_voipShowMeter;
 extern	cvar_t	*cl_voip;
 
