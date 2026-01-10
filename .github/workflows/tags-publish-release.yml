@@ -32,6 +32,23 @@ jobs:
         name: '${{github.ref_name}}-${{env.RELEASE_STAGE}}'
         prerelease: ${{env.RELEASE_IS_PRERELEASE}}
 
+  deploy-assets:
+    runs-on: ubuntu-24.04
+    environment: 'release'
+    needs: [create-release]
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build PK3
+      working-directory: assets
+      run: zip -9 -r ../zzz_voip.pk3 ./
+
+    - name: Release
+      uses: softprops/action-gh-release@v2.3.2
+      with:
+        files: zzz_voip.pk3
+
   deploy-all:
     strategy:
       matrix:
