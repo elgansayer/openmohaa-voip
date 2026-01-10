@@ -2971,7 +2971,7 @@ void CL_VoipFrame(void) {
 
 		if (pcmBufferCount >= FRAME_SIZE) {
 			// Apply Capture Multiplier (Pre-amp)
-			float captureMult = cl_voipScale->value;
+			float captureMult = s_alCaptureMult->value;
 			if (captureMult != 1.0f) {
 				int j;
 				for (j = 0; j < FRAME_SIZE; j++) {
