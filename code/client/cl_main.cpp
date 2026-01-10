@@ -139,6 +139,7 @@ cvar_t *voip_bitrate = NULL;
 cvar_t *cl_voipLoopback = NULL;
 cvar_t *cl_voipScale = NULL; // formerly cl_voipCaptureMult
 cvar_t *cl_voipGainDuringCapture = NULL;
+cvar_t *s_volumeVoice = NULL;
 cvar_t *cl_voipShowMeter = NULL;
 cvar_t *cl_voipSendTarget = NULL; // Declared here to be safe
 

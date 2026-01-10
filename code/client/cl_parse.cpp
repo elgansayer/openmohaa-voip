@@ -884,7 +884,7 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 	//Com_DPrintf("VoIP: Received packet from client %d, size=%d, flags=%d, ignore=%d\n", 
 	//	sender, packetsize, flags, ignoreData);
 
-	if (sender < 0)
+	if (sender < 0 || sender >= MAX_CLIENTS)
 		return;   // short/invalid packet, bail.
 	else if (generation < 0)
 		return;   // short/invalid packet, bail.
