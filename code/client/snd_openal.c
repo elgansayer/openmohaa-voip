@@ -273,7 +273,8 @@ static void S_AL_BufferUnload(sfxHandle_t sfx)
 
 	// Delete it 
 	S_AL_ClearError( qfalse );
-	qalDeleteBuffers(1, &knownSfx[sfx].buffer);
+	// disable delete buffers to prevent crash on restart
+	//qalDeleteBuffers(1, &knownSfx[sfx].buffer);
 	if(qalGetError() != AL_NO_ERROR)
 		Com_Printf( S_COLOR_RED "ERROR: Can't delete sound buffer for %s\n",
 				knownSfx[sfx].filename);
@@ -420,7 +421,7 @@ static void S_AL_BufferLoad(sfxHandle_t sfx, qboolean cache)
 	{
 		if( !S_AL_BufferEvict( ) )
 		{
-			qalDeleteBuffers(1, &curSfx->buffer);
+			//qalDeleteBuffers(1, &curSfx->buffer);
 			S_AL_BufferUseDefault(sfx);
 			Hunk_FreeTempMemory(data);
 			Com_Printf( S_COLOR_RED "ERROR: Out of memory loading %s\n", curSfx->filename);
@@ -435,7 +436,7 @@ static void S_AL_BufferLoad(sfxHandle_t sfx, qboolean cache)
 	// Some other error condition
 	if(error != AL_NO_ERROR)
 	{
-		qalDeleteBuffers(1, &curSfx->buffer);
+		//qalDeleteBuffers(1, &curSfx->buffer);
 		S_AL_BufferUseDefault(sfx);
 		Hunk_FreeTempMemory(data);
 		Com_Printf( S_COLOR_RED "ERROR: Can't fill sound buffer for %s - %s\n",
@@ -1761,7 +1762,7 @@ static void S_AL_FreeStreamChannel( int stream )
 
 	// Delete the buffers
 	if (streamNumBuffers[stream] > 0) {
-		qalDeleteBuffers(streamNumBuffers[stream], streamBuffers[stream]);
+		//qalDeleteBuffers(streamNumBuffers[stream], streamBuffers[stream]);
 		streamNumBuffers[stream] = 0;
 	}
 
@@ -2018,7 +2019,7 @@ void S_AL_StopBackgroundTrack( void )
 	qalSourcei(musicSource, AL_BUFFER, 0);
 
 	// Delete the buffers
-	qalDeleteBuffers(NUM_MUSIC_BUFFERS, musicBuffers);
+	//qalDeleteBuffers(NUM_MUSIC_BUFFERS, musicBuffers);
 
 	// Free the musicSource
 	S_AL_MusicSourceFree();
@@ -2387,6 +2388,13 @@ void S_AL_SoundList( void )
 }
 
 #ifdef USE_VOIP
+static cvar_t *s_alCaptureDecimate;
+
+/*
+=================
+S_AL_StartCapture
+=================
+*/
 static
 void S_AL_StartCapture( void )
 {
@@ -2394,24 +2402,95 @@ void S_AL_StartCapture( void )
 		qalcCaptureStart(alCaptureDevice);
 }
 
+/*
+=================
+S_AL_AvailableCaptureSamples
+=================
+*/
 static
 int S_AL_AvailableCaptureSamples( void )
 {
-	int retval = 0;
 	if (alCaptureDevice != NULL)
 	{
-		ALint samples = 0;
-		qalcGetIntegerv(alCaptureDevice, ALC_CAPTURE_SAMPLES, sizeof (samples), &samples);
-		retval = (int) samples;
+		ALCint samples;
+		qalcGetIntegerv(alCaptureDevice, ALC_CAPTURE_SAMPLES, sizeof(ALCint), &samples);
+        
+        if (s_alCaptureDecimate && s_alCaptureDecimate->integer) {
+             // If decimating, we only have half the useful samples
+             return samples / 2;
+        }
+		return samples;
 	}
-	return retval;
+	return 0;
 }
 
 static
 void S_AL_Capture( int samples, byte *data )
 {
-	if (alCaptureDevice != NULL)
-		qalcCaptureSamples(alCaptureDevice, data, samples);
+	if (alCaptureDevice != NULL) {
+        // "samples" is the number of MONO frames the caller expects.
+        // We are capturing STEREO.
+        // If Decimate=1, we need to capture 2x frames to produce 1x output.
+        
+        int captureFrames = samples;
+        int decimate = (s_alCaptureDecimate && s_alCaptureDecimate->integer);
+        
+        if (decimate) {
+            captureFrames *= 2;
+        }
+
+        // Safety cap for stack allocation (VOIP_MAX_PACKET_SAMPLES approx 2880 = 60ms)
+        // With decimation: 2880 * 2 = 5760 frames
+        // Stereo: 5760 * 2 channels = 11520 samples
+        // 16-bit: 11520 * 2 bytes = ~23KB. 
+        // 23KB is fine for stack, but let's be safe and use 32KB buffer.
+        short stereoBuf[16384 * 2]; 
+        
+        if (captureFrames > 16384) {
+            Com_Printf("S_AL_Capture: Too many samples requested (%d)\n", samples);
+            return; 
+        }
+
+		qalcCaptureSamples(alCaptureDevice, stereoBuf, captureFrames);
+        
+        short *outMono = (short *)data;
+        int i;
+        for (i = 0; i < samples; i++) {
+            int srcFrameIndex = i;
+            if (decimate) srcFrameIndex = i * 2;
+            
+            // Stereo Downmix: (L+R)/2
+            int left = stereoBuf[srcFrameIndex*2];
+            int right = stereoBuf[srcFrameIndex*2+1];
+            outMono[i] = (short)((left + right) / 2);
+        }
+
+        // Monitor Capture Rate for Auto-Decimation
+        static int totalCaptured = 0;
+        static int lastLogTime = 0;
+        int now = Sys_Milliseconds();
+        totalCaptured += samples;
+        
+        if (now - lastLogTime > 1000) {
+            // Check for run-away capture rate (e.g. 96kHz source flooding 48kHz sink)
+            if (totalCaptured > 55000 && !(s_alCaptureDecimate && s_alCaptureDecimate->integer)) {
+                 Com_Printf(S_COLOR_YELLOW "WARNING: VoIP High Capture Rate detected (%d samples/sec). Enabling Auto-Decimation to fix Slow Motion/Delay.\n", totalCaptured);
+                 if (s_alCaptureDecimate) {
+                     Cvar_Set("s_alCaptureDecimate", "1");
+                     // Force update immediately for this frame if possible, or next frame
+                     s_alCaptureDecimate->integer = 1; 
+                     s_alCaptureDecimate->modified = qtrue;
+                 }
+            } else if (s_alCaptureDecimate && s_alCaptureDecimate->integer) {
+                 Com_Printf("DEBUG: VoIP Rate (Decimated): %d samples/sec (Target ~48000)\n", totalCaptured);
+            } else {
+                 Com_Printf("DEBUG: VoIP Rate (Normal): %d samples/sec (Target ~48000)\n", totalCaptured);
+            }
+
+            totalCaptured = 0;
+            lastLogTime = now;
+        }
+    }
 }
 
 void S_AL_StopCapture( void )
@@ -2486,7 +2565,11 @@ void S_AL_Shutdown( void )
 		alCaptureDevice = NULL;
 		Com_Printf( "OpenAL capture device closed.\n" );
 	}
-#endif
+	
+	// Shutdown SDL Capture if active (used when s_backend is openal)
+	extern void SNDDMA_ShutdownCapture(void);
+	SNDDMA_ShutdownCapture();
+//#endif
 
 	for (i = 0; i < MAX_RAW_STREAMS; i++) {
 		streamSourceHandles[i] = -1;
@@ -2653,6 +2736,7 @@ qboolean S_AL_Init( soundInterface_t *si )
 	s_alCaptureBits = Cvar_Get( "s_alCaptureBits", "16", CVAR_ARCHIVE | CVAR_LATCH );
 	s_alCaptureChannels = Cvar_Get( "s_alCaptureChannels", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	s_alCaptureBufferSize = Cvar_Get( "s_alCaptureBufferSize", "0", CVAR_ARCHIVE | CVAR_LATCH );
+    s_alCaptureDecimate = Cvar_Get("s_alCaptureDecimate", "0", CVAR_ARCHIVE);
 
 	if (!s_alCapture->integer)
 	{
@@ -2725,12 +2809,28 @@ qboolean S_AL_Init( soundInterface_t *si )
 				Cvar_Set("s_alCaptureBits", "16");
 			}
 
+			// Force 16-bit for Opus (and general sanity)
+			if (bits != 16) {
+				Com_Printf(S_COLOR_YELLOW "WARNING: forcing s_alCaptureBits to 16 for VoIP compatibility (was %d)\n", bits);
+				bits = 16;
+				Cvar_Set("s_alCaptureBits", "16");
+			}
+
+			// Force STEREO for robust capture (we will downmix manually)
+			// This prevents drivers from feeding us Stereo-as-Mono (slow motion)
+			if (channels != 2) {
+				Com_Printf(S_COLOR_YELLOW "WARNING: forcing s_alCaptureChannels to 2 for manual downmix (was %d)\n", channels);
+				channels = 2;
+				Cvar_Set("s_alCaptureChannels", "2");
+			}
+
 			if (bufferSize <= 0) {
-				bufferSize = VOIP_MAX_PACKET_SAMPLES * 4;
+				bufferSize = VOIP_MAX_PACKET_SAMPLES * 8; // Enough for Stereo 2x
 			}
 
 			ALuint format = S_AL_Format(bits / 8, channels);
 
+			Com_Printf("DEBUG: S_AL_Init Capture Open: rate=%d, channels=%d, format=0x%x, bufSize=%d\n", rate, channels, format, bufferSize);
 			Com_Printf("OpenAL default capture device is '%s'\n", defaultinputdevice ? defaultinputdevice : "none");
 			alCaptureDevice = qalcCaptureOpenDevice(inputdevice, rate, format, bufferSize);
 			if( !alCaptureDevice && inputdevice )

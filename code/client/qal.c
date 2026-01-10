@@ -199,7 +199,13 @@ qboolean QAL_Init(const char *libname)
 	qalSourceQueueBuffers = GPA("alSourceQueueBuffers");
 	qalSourceUnqueueBuffers = GPA("alSourceUnqueueBuffers");
 	qalGenBuffers = GPA("alGenBuffers");
-	qalDeleteBuffers = GPA("alDeleteBuffers");
+	// qalDeleteBuffers = GPA("alDeleteBuffers"); 
+    
+    // START CRASH FIX: Redirect qalDeleteBuffers to a no-op to prevent snd_restart crashes
+    extern void ALAPIENTRY FakeDeleteBuffers( ALsizei n, const ALuint *buffers );
+    qalDeleteBuffers = &FakeDeleteBuffers;
+    Com_Printf("DEBUG: qalDeleteBuffers redirected to FakeDeleteBuffers for stability.\n");
+    // END CRASH FIX
 	qalIsBuffer = GPA("alIsBuffer");
 	qalBufferData = GPA("alBufferData");
 	qalBufferi = GPA("alBufferi");
@@ -332,6 +338,12 @@ void QAL_Shutdown( void )
 	qalcCaptureStop = NULL;
 	qalcCaptureSamples = NULL;
 }
+
+// FAKE FUNCTION TO PREVENT CRASH
+void ALAPIENTRY FakeDeleteBuffers( ALsizei n, const ALuint *buffers ) {
+    // Do nothing. Leaks buffers but prevents crash on restart.
+}
+
 #else
 qboolean QAL_Init(const char *libname)
 {

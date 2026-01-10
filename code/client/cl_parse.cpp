@@ -815,11 +815,14 @@ static qboolean CL_ShouldIgnoreVoipSender(int sender)
 	}
 	
 	if ((sender == clc.clientNum) && (!clc.demoplaying)) {
+		/*
 		if (!cl_voipLoopback || !cl_voipLoopback->integer) {
 			return qtrue;
 		} else {
 			return qfalse;
 		}
+		*/
+		return qfalse; // FORCE LOOPBACK FOR DEBUGGING
 	}
 	
 	if (clc.voipMuteAll) {
@@ -916,13 +919,14 @@ static void CL_PlayVoip(int sender, int samplecnt, const byte *data, int flags)
 {
 	float volume = clc.voipGain[sender] * Cvar_VariableValue("s_volumeVoice");
 
+	// Fix: Only play ONE channel to avoid double playback
+	// Prefer DIRECT (non-spatial) when both flags are set
 	if(flags & VOIP_DIRECT)
 	{
 		S_RawSamples(sender + 1, samplecnt, VOIP_SAMPLE_RATE, 2, 1,
 	             data, volume, -1);
 	}
-
-	if(flags & VOIP_SPATIAL)
+	else if(flags & VOIP_SPATIAL)
 	{
 		S_RawSamples(sender + MAX_CLIENTS + 1, samplecnt, VOIP_SAMPLE_RATE, 2, 1,
 	             data, volume, sender);
@@ -989,32 +993,29 @@ void CL_RunVoipJitterBuffer( void ) {
         
         // Adaptive Playout: Wait until we have TARGET_BUFFER_COUNT packets buffered
         // 180ms minimum for WAN jitter tolerance (3 packets @ 60ms)
-        static cvar_t *cl_voipJitterMs = NULL;
-        if (!cl_voipJitterMs) cl_voipJitterMs = Cvar_Get("cl_voipJitterMs", "180", CVAR_ARCHIVE);
-        const int TARGET_BUFFER_COUNT = (cl_voipJitterMs->integer / 60);
-        if (jb->lastSequencePop == -1 && jb->count < TARGET_BUFFER_COUNT) {
-            continue; // Wait for initial buffering
-        }
-		
         // Timing: Use monotonic realtime (not game time) for playout timing
-        int packetDuration = 60; // ms (Opus frame duration)
+        static int lastPacketDuration[MAX_CLIENTS];
+        int prevDuration = lastPacketDuration[i];
+        if (prevDuration <= 0) prevDuration = 60; // Fallback
+
         int currentTime = Sys_Milliseconds();
         
         // Adaptive drift correction with larger adjustments for network jitter
         if (jb->lastPacketTime > 0) {
-            int expectedTime = jb->lastPacketTime + packetDuration;
+            int expectedTime = jb->lastPacketTime + prevDuration;
             int drift = currentTime - expectedTime;
             
             // Adjust for network jitter (±10-20ms adjustments)
             if (drift < -20) {
-                packetDuration += 10; // Slow down to prevent underrun
+                prevDuration += 10; // Slow down to prevent underrun
             }
             else if (drift > 20) {
-                packetDuration -= 10; // Speed up to prevent overrun
+                prevDuration -= 10; // Speed up to prevent overrun
             }
         }
         
-        if (currentTime - clc.voipLastPacketTime[i] < packetDuration) {
+        // Timing gate: Wait for frame duration before playing next
+        if (currentTime - clc.voipLastPacketTime[i] < prevDuration) {
             continue; // Not time yet
         }
 		
@@ -1045,6 +1046,17 @@ void CL_RunVoipJitterBuffer( void ) {
             
             if (numSamples > 0) {
                 CL_PlayVoip(i, numSamples, (const byte *)decoded, flags);
+                
+                // DIAGNOSTIC: Track playback rate
+                static int totalSamplesPlayed = 0;
+                static int lastDiagTime = 0;
+                int diagNow = Sys_Milliseconds();
+                totalSamplesPlayed += numSamples;
+                if (diagNow - lastDiagTime > 1000) {
+                    Com_Printf("^5PLAYBACK RATE: %d samples/sec (Expected 48000)\n", totalSamplesPlayed);
+                    totalSamplesPlayed = 0;
+                    lastDiagTime = diagNow;
+                }
             }
 
             pos += frameLen;
@@ -1054,12 +1066,14 @@ void CL_RunVoipJitterBuffer( void ) {
         if (framesDecoded > 0) {
             clc.voipLastPacketTime[i] = Sys_Milliseconds(); // Use monotonic time
             jb->lastPacketTime = Sys_Milliseconds();
+            lastPacketDuration[i] = framesDecoded * 60;
         }
         
         jb->lastSequencePop = pkt->sequence;
         JB_Pop(i);
 	}
 }
+
 
 /*
 =====================
@@ -1070,6 +1084,9 @@ A VoIP message has been received from the server
 */
 static
 void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
+	// IOQuake3 Approach: Decode and play IMMEDIATELY (no jitter buffer)
+	static short decoded[VOIP_MAX_PACKET_SAMPLES*4];
+	
 	const int sender = MSG_ReadShort(msg);
 	const int generation = MSG_ReadByte(msg);
 	const int sequence = MSG_ReadLong(msg);
@@ -1077,19 +1094,23 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 	const int packetsize = MSG_ReadShort(msg);
 	const int flags = MSG_ReadBits(msg, VOIP_FLAGCNT);
 	unsigned char encoded[4000];
+	int numSamples;
+	int seqdiff;
+	int written = 0;
+	int i;
 
 	if (sender < 0 || sender >= MAX_CLIENTS)
-		return;   // short/invalid packet, bail.
+		return;
 	else if (generation < 0)
-		return;   // short/invalid packet, bail.
+		return;
 	else if (sequence < 0)
-		return;   // short/invalid packet, bail.
+		return;
 	else if (frames < 0)
-		return;   // short/invalid packet, bail.
+		return;
 	else if (packetsize < 0)
-		return;   // short/invalid packet, bail.
+		return;
 
-	if (packetsize > sizeof (encoded)) {  // overlarge packet?
+	if (packetsize > sizeof (encoded)) {
 		int bytesleft = packetsize;
 		while (bytesleft) {
 			int br = bytesleft;
@@ -1098,14 +1119,75 @@ void CL_ParseVoip ( msg_t *msg, qboolean ignoreData ) {
 			MSG_ReadData(msg, encoded, br);
 			bytesleft -= br;
 		}
-		return;   // overlarge packet, bail.
+		return;
 	}
 
 	MSG_ReadData(msg, encoded, packetsize);
 
-	// Store in Jitter Buffer
-	JB_Push(sender, encoded, packetsize, sequence, generation, frames, flags);
+	if (ignoreData) {
+		return;
+	} else if (!clc.voiceCodec) {
+		return;
+	} else if (CL_ShouldIgnoreVoipSender(sender)) {
+		return;
+	}
+
+	// Handle generation changes and sequence gaps (like IOQuake3)
+	seqdiff = sequence - clc.voipIncomingSequence[sender];
+
+	if (generation != clc.voipIncomingGeneration[sender]) {
+		clc.voiceCodec->ResetDecoder(sender);
+		clc.voipIncomingGeneration[sender] = generation;
+		seqdiff = 0;
+	} else if (seqdiff < 0) {
+		clc.voiceCodec->ResetDecoder(sender);
+		seqdiff = 0;
+	} else if (seqdiff * VOIP_MAX_PACKET_SAMPLES*2 >= sizeof(decoded)) {
+		clc.voiceCodec->ResetDecoder(sender);
+		seqdiff = 0;
+	}
+
+	// Handle lost packets via FEC (like IOQuake3)
+	if (seqdiff != 0) {
+		for (i = 0; i < seqdiff; i++) {
+			numSamples = clc.voiceCodec->Decode(sender, NULL, 0, decoded + written, 
+			                                    VOIP_MAX_PACKET_SAMPLES, true);
+			if (numSamples > 0) {
+				written += numSamples;
+			}
+		}
+	}
+	// Decode each length-prefixed frame (OpenMoHAA format: [2-byte len][opus data]...)
+	int pos = 0;
+	while (pos < packetsize) {
+		// Read 2-byte frame length (Little Endian)
+		if (pos + 2 > packetsize) {
+			break;
+		}
+		int frameLen = encoded[pos] | (encoded[pos+1] << 8);
+		pos += 2;
+
+		if (pos + frameLen > packetsize || frameLen <= 0) {
+			break;
+		}
+
+		numSamples = clc.voiceCodec->Decode(sender, encoded + pos, frameLen, decoded + written, 
+		                                    ARRAY_LEN(decoded) - written, false);
+		if (numSamples > 0) {
+			written += numSamples;
+		}
+
+		pos += frameLen;
+	}
+
+	// Play immediately (like IOQuake3)
+	if (written > 0) {
+		CL_PlayVoip(sender, written, (const byte *)decoded, flags);
+	}
+
+	clc.voipIncomingSequence[sender] = sequence + frames;
 }
+
 #endif
 
 

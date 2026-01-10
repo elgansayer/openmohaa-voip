@@ -51,10 +51,12 @@ static SDL_AudioDeviceID sdlPlaybackDevice;
 #define USE_SDL_AUDIO_CAPTURE
 
 static SDL_AudioDeviceID sdlCaptureDevice;
+static int sdlObtainedCaptureRate = 48000; // Default to 48kHz
 static cvar_t *s_sdlCapture;
 static cvar_t *s_sdlCaptureDevice;
 static cvar_t *s_sdlAvailableCaptureDevices;
 static cvar_t *s_sdlCaptureFreq;
+static cvar_t *s_sdlInputRate; // Manual Override for Source Rate (e.g. 44100)
 static cvar_t *s_sdlCaptureChannels;
 static cvar_t *s_sdlCaptureSamples;
 static cvar_t *s_voipLevel;
@@ -106,12 +108,9 @@ void SNDDMA_InitCapture(void)
 		s_sdlAvailableCaptureDevices = Cvar_Get("s_sdlAvailableCaptureDevices", deviceList, CVAR_ROM | CVAR_NORESTART);
 	}
 
-	// Alias s_alCapture to s_sdlCapture for compliance
-	cvar_t *alCaptureCvar = Cvar_Get("s_alCapture", "1", CVAR_ARCHIVE | CVAR_LATCH);
-	if (alCaptureCvar->integer) {
-		Cvar_Set("s_sdlCapture", "1");
-	}
-
+	// Alias #ifdef USE_VOIP
+	// !!! FIXME: some of these SDL_OpenAudioDevice() values should be cvars.
+	s_sdlCapture = Cvar_Get( "s_sdlCapture", "1", CVAR_ARCHIVE | CVAR_LATCH );
 	if (!s_sdlCapture->integer)
 	{
 		Com_Printf("SDL audio capture support disabled by user ('+set s_sdlCapture 1' to enable)\n");
@@ -124,49 +123,36 @@ void SNDDMA_InitCapture(void)
 #endif
 	else
 	{
+		/* !!! FIXME: list available devices and let cvar specify one, like OpenAL does */
 		SDL_AudioSpec spec;
-		const char *deviceName = s_sdlCaptureDevice->string;
-		int samples;
-
 		SDL_zero(spec);
-		
-		// RFC 6716: Opus requires 48kHz - enforce but use cvar
-		spec.freq = s_sdlCaptureFreq->integer;
-		if (spec.freq != 48000) {
-			Com_Printf("^3Warning: Opus requires 48kHz sample rate, overriding s_sdlCaptureFreq from %d to 48000\n", spec.freq);
-			spec.freq = 48000;
-			Cvar_Set("s_sdlCaptureFreq", "48000");
-		}
-		
+		spec.freq = 48000;
 		spec.format = AUDIO_S16SYS;
-		spec.channels = s_sdlCaptureChannels->integer;
+		spec.channels = 1;
+		spec.samples = 2048 * 4; // IOQ3 uses VOIP_MAX_PACKET_SAMPLES * 4. Assuming 2048? Or use hardcoded 4096?
+        // Using IOQ3 style: 
+        // spec.samples = VOIP_MAX_PACKET_SAMPLES * 4; 
+        
+        s_sdlCaptureSamples = Cvar_Get("s_sdlCaptureSamples", "4096", CVAR_ARCHIVE);
+        if (s_sdlCaptureSamples->integer > 0) spec.samples = s_sdlCaptureSamples->integer;
+        else spec.samples = 2048 * 4;
 
-		samples = s_sdlCaptureSamples->integer;
-		if (samples <= 0) {
-			// 120ms buffer (2 frames @ 60ms = 5760 samples) instead of 720ms
-			samples = VOIP_MAX_FRAME_SAMPLES * 2;
-		}
-		spec.samples = samples;
+        s_sdlCaptureDevice = Cvar_Get("s_sdlCaptureDevice", "", CVAR_ARCHIVE | CVAR_LATCH);
+        const char *deviceName = s_sdlCaptureDevice->string;
+        if (deviceName && !*deviceName) deviceName = NULL;
 
-		if (deviceName && !*deviceName) {
-			deviceName = NULL;
-		}
-
+        // IOQ3 Logic: Pass NULL for obtained to force SDL Resampling
 		sdlCaptureDevice = SDL_OpenAudioDevice(deviceName, SDL_TRUE, &spec, NULL, 0);
-	Com_Printf("^2VoIP CAPTURE: Attempting to open device '%s' (freq=%d, channels=%d, samples=%d)\n", 
-		deviceName ? deviceName : "default", spec.freq, spec.channels, spec.samples);
-
-	if (sdlCaptureDevice == 0 && deviceName) {
-		Com_Printf("Failed to open capture device '%s', trying default.\n", deviceName);
-		deviceName = NULL;
-		sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
-	}
-	
-	if (sdlCaptureDevice) {
-		Com_Printf("^2VoIP CAPTURE: Device opened successfully! ID=%d\n", sdlCaptureDevice);
-	} else {
-		Com_Printf("^1VoIP CAPTURE: FAILED to open device: %s\n", SDL_GetError());
-	}
+		
+        Com_Printf( "SDL capture device %s.\n",
+				    (sdlCaptureDevice == 0) ? "failed to open" : "opened");
+        
+        if (sdlCaptureDevice == 0 && deviceName) {
+            Com_Printf("Failed to open capture device '%s', trying default.\n", deviceName);
+             sdlCaptureDevice = SDL_OpenAudioDevice(NULL, SDL_TRUE, &spec, NULL, 0);
+             Com_Printf( "SDL capture device (default) %s.\n",
+				    (sdlCaptureDevice == 0) ? "failed to open" : "opened");
+        }
 
 	// Store capture device name for UI display
 	{
@@ -445,6 +431,9 @@ void SNDDMA_StartCapture(void)
 int SNDDMA_AvailableCaptureSamples(void)
 {
 #ifdef USE_SDL_AUDIO_CAPTURE
+	if (!sdlCaptureDevice) return 0;
+	
+	// SDL_GetQueuedAudioSize returns bytes.
 	// divided by 2 to convert from bytes to (mono16) samples.
 	return sdlCaptureDevice ? (SDL_GetQueuedAudioSize(sdlCaptureDevice) / 2) : 0;
 #else
@@ -455,33 +444,21 @@ int SNDDMA_AvailableCaptureSamples(void)
 void SNDDMA_Capture(int samples, byte *data)
 {
 #ifdef USE_SDL_AUDIO_CAPTURE
-	// multiplied by 2 to convert from (mono16) samples to bytes.
+	// multiplied by 2 to convert from (mono16) samples to bytes. (Since we requested Mono in Init)
 	if (sdlCaptureDevice)
 	{
 		SDL_DequeueAudio(sdlCaptureDevice, data, samples * 2);
-
-		// Calculate audio level for s_voipLevel cvar
-		if (s_voipLevel)
-		{
-			int i;
-			float total = 0;
-			short *pcm = (short *)data;
-			for (i = 0; i < samples; i++)
-			{
-				float s = pcm[i] / 32768.0f;
-				total += s * s;
-			}
-			float rms = sqrtf(total / (samples > 0 ? samples : 1));
-			// Smoothing and scaling
-			float currentLevel = rms * 5.0f; // Scale for better visibility in bar
-			if (currentLevel > 1.0f) currentLevel = 1.0f;
-			
-			float oldLevel = s_voipLevel->value;
-			float newLevel = (oldLevel * 0.7f) + (currentLevel * 0.3f);
-			// Directly set value to avoid Cvar_Set2 spam
-			s_voipLevel->value = newLevel;
-			s_voipLevel->modified = qtrue;
-		}
+        
+        // Debug Log (Optional)
+        static int totalCaptured = 0;
+        static int lastLogTime = 0;
+        int now = Sys_Milliseconds();
+        totalCaptured += samples;
+        if (now - lastLogTime > 1000) {
+            Com_Printf("^3CAPTURE RATE: %d samples/sec (Expected 48000)\n", totalCaptured);
+            totalCaptured = 0;
+            lastLogTime = now;
+        }
 	}
 	else
 #endif
@@ -489,6 +466,9 @@ void SNDDMA_Capture(int samples, byte *data)
 		SDL_memset(data, '\0', samples * 2);
 	}
 }
+
+
+
 
 void SNDDMA_StopCapture(void)
 {

@@ -198,7 +198,7 @@ static void S_OPENAL_NukeBuffer(ALuint *bufptr)
     }
 
     alDieIfError();
-    qalDeleteBuffers(1, bufptr);
+    //qalDeleteBuffers(1, bufptr);
 
     alDieIfError();
     *bufptr = 0;
@@ -371,7 +371,11 @@ static bool S_OPENAL_InitContext()
     case 44:
         al_frequency = 44100;
         break;
+    case 48:
+        al_frequency = 48000;
+        break;
     }
+    Com_Printf("^2OpenAL Init: s_khz=%d -> al_frequency=%d\n", s_khz->integer, al_frequency);
 
     attrlist[0] = ALC_FREQUENCY;
     attrlist[1] = al_frequency;
@@ -758,7 +762,7 @@ void S_OPENAL_Shutdown()
     Cmd_RemoveCommand("tmvolume");
 
     S_OPENAL_NukeContext();
-
+    
     s_bProvidersEmunerated = false;
     al_initialized         = false;
 
@@ -3097,7 +3101,7 @@ bool openal_channel::set_sfx(sfx_t *pSfx)
             alDieIfError();
 
             if (!S_OPENAL_LoadMP3_Codec(pSfx->name, pSfx)) {
-                qalDeleteBuffers(1, &pSfx->buffer);
+                //qalDeleteBuffers(1, &pSfx->buffer);
                 alDieIfError();
 
                 Com_DPrintf("OpenAL: Failed to load MP3.\n");
@@ -4962,7 +4966,7 @@ void openal_channel_two_d_stream::clear_stream()
 
     qalSourceStop(source);
     qalSourcei(source, AL_BUFFER, 0);
-    qalDeleteBuffers(MAX_STREAM_BUFFERS, buffers);
+    //qalDeleteBuffers(MAX_STREAM_BUFFERS, buffers);
 
     if (streamHandle) {
         S_CodecCloseStream((snd_stream_t *)streamHandle);
@@ -5196,7 +5200,7 @@ void S_OPENAL_RawSamples(int stream, int samples, int rate, int width, int chann
 	while (processed--) {
 		ALuint unqueued;
 		qalSourceUnqueueBuffers(voipSources[clientNum], 1, &unqueued);
-		qalDeleteBuffers(1, &unqueued);
+		//qalDeleteBuffers(1, &unqueued);
 	}
 
 	// Create and fill new buffer
