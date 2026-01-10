@@ -41,8 +41,11 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Build PK3
-      working-directory: assets
-      run: zip -9 -r ../zzz_voip.pk3 ./
+      run: |
+        cd assets
+        zip -9 -r ../zzz_voip.pk3 .
+        cd ../main
+        zip -9 -r ../zzz_voip.pk3 .
 
     - name: Release
       uses: softprops/action-gh-release@v2.3.2
