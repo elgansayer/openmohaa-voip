@@ -1,223 +1,234 @@
-menu "voipsettings" 480 480 from_top 0.1
+menu "voipsettings" 480 520 from_top 0.1
+bgcolor 0.1 0.1 0.15 0.95
+borderstyle "RAISED"
 
+resource Label {
     name "voip_title"
     rect 10 10 460 24
-    fgcolor 1 1 1 1
+    fgcolor 1.0 0.9 0.3 1.0
+    font facfont-20
     title "VoIP Settings"
 }
 
+// === Audio Device Section ===
+resource Label {
+    name "device_section"
+    rect 10 45 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Audio Device"
+}
 resource Label {
     name "device_label"
-    rect 10 40 100 18
-    fgcolor 1 0.8 0.2 1
+    rect 20 70 100 18
+    fgcolor 0.8 0.8 0.8 1.0
     title "Device:"
 }
 resource Label {
     name "device_name"
-    rect 120 40 340 18
-    fgcolor 0.7 0.9 1.0 1
+    rect 130 70 330 18
+    fgcolor 0.5 0.9 1.0 1.0
     linkcvar "s_captureDeviceName"
 }
 
+// === Microphone Settings ===
+resource Label {
+    name "mic_section"
+    rect 10 100 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Microphone"
+}
 resource Label {
     name "mic_level_label"
-    rect 10 65 100 18
-    fgcolor 1 1 1 1
-    title "Mic Level:"
+    rect 20 125 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Level:"
 }
 resource Label {
     name "mic_level_bg"
-    rect 120 68 340 12
-    fgcolor 1.00 1.00 1.00 1.00
-    bgcolor 0.50 0.50 0.50 0.00
+    rect 130 128 200 10
     borderstyle "NONE"
     shader textures/hud/healthback
 }
 resource Label {
     name "mic_level_meter"
-    rect 120 68 340 12
-    fgcolor 1 1 1 1
-    bgcolor 0 0 0 0
+    rect 130 128 200 10
     borderstyle "NONE"
     linkcvar "s_voipLevel"
     statbar horizontal 0 1
     statbar_shader textures/hud/healthmeter
-    statbar_shader_flash textures/hud/healthmeterflash
 }
-
 resource Label {
     name "mic_gain_label"
-    rect 10 85 150 18
-    fgcolor 1 1 1 1
-    title "Mic Gain (Boost):"
+    rect 20 150 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Gain:"
 }
 resource Slider {
     name "mic_gain_slider"
-    rect 160 85 200 18
-    fgcolor 0.5 0.5 0.5 1
+    rect 130 150 200 18
     linkcvar "s_alCaptureMult"
-    min 0.0
+    min 0.5
     max 4.0
 }
-
 resource Label {
-    name "audio_title"
-    rect 10 115 460 18
-    fgcolor 1 0.8 0.2 1
-    title "Audio Settings:"
+    name "mic_gain_value"
+    rect 340 150 50 18
+    fgcolor 0.7 0.7 0.7 1.0
+    linkcvar "s_alCaptureMult"
 }
 
+// === Voice Activity Detection ===
 resource Label {
-    name "duck_label"
-    rect 10 140 150 18
-    fgcolor 1 1 1 1
-    title "Ducking Volume:"
+    name "vad_section"
+    rect 10 180 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Voice Activation (VAD)"
 }
-// This controls how much game volume drops when you speak
-resource Slider {
-    name "duck_slider"
-    rect 160 140 200 18
-    fgcolor 0.5 0.5 0.5 1
-    linkcvar "cl_voipGainDuringCapture"
-    min 0.0
-    max 1.0
-}
-
-resource Label {
-    name "vol_voice_label"
-    rect 10 165 150 18
-    fgcolor 1 1 1 1
-    title "Voice Volume:"
-}
-resource Slider {
-    name "vol_voice_slider"
-    rect 160 165 200 18
-    fgcolor 0.5 0.5 0.5 1
-    linkcvar "s_volumeVoice"
-    min 0.0
-    max 2.0
-}
-
-resource Label {
-    name "bitrate_label"
-    rect 10 190 150 18
-    fgcolor 1 1 1 1
-    title "Bitrate:"
-}
-resource Slider {
-    name "bitrate_slider"
-    rect 160 190 200 18
-    fgcolor 0.5 0.5 0.5 1
-    linkcvar "voip_bitrate"
-    min 8000
-    max 64000
-}
-
-resource Label {
-    name "controls_title"
-    rect 10 220 460 18
-    fgcolor 1 0.8 0.2 1
-    title "General:"
-}
-
-resource Label {
-    name "voip_enabled_label"
-    rect 10 245 180 20
-    fgcolor 1 1 1 1
-    title "Enable VoIP:"
-}
-resource CheckBox {
-    name "voip_enabled_checkbox"
-    rect 200 245 20 20
-    linkcvar "cl_voip"
-}
-
-resource Label {
-    name "voip_echo_label"
-    rect 10 270 180 20
-    fgcolor 1 1 1 1
-    title "Loopback Test (Echo):"
-}
-
 resource Label {
     name "vad_enable_label"
-    rect 10 225 180 20
-    fgcolor 1 1 1 1
-    title "Voice Activation:"
+    rect 20 205 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Enable:"
 }
 resource CheckBox {
-    name "vad_invoke_checkbox"
-    rect 200 225 20 20
+    name "vad_checkbox"
+    rect 130 205 20 20
     linkcvar "cl_voipUseVAD"
 }
 resource Label {
     name "vad_thresh_label"
-    rect 10 250 180 20
-    fgcolor 1 1 1 1
-    title "VAD Threshold:"
+    rect 180 205 80 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Threshold:"
 }
 resource Slider {
     name "vad_thresh_slider"
-    rect 200 250 140 18
-    fgcolor 1 1 1 1
+    rect 270 205 130 18
+    linkcvar "cl_voipVADThreshold"
     min 0.0
     max 0.5
-    linkcvar "cl_voipVADThreshold"
 }
 
+// === Playback Settings ===
+resource Label {
+    name "playback_section"
+    rect 10 235 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Playback"
+}
+resource Label {
+    name "voice_vol_label"
+    rect 20 260 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Voice Volume:"
+}
+resource Slider {
+    name "voice_vol_slider"
+    rect 130 260 200 18
+    linkcvar "s_volumeVoice"
+    min 0.0
+    max 2.0
+}
+resource Label {
+    name "duck_label"
+    rect 20 285 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Ducking:"
+}
+resource Slider {
+    name "duck_slider"
+    rect 130 285 200 18
+    linkcvar "cl_voipGainDuringCapture"
+    min 0.0
+    max 1.0
+}
+resource Label {
+    name "agc_label"
+    rect 20 310 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Auto Gain:"
+}
 resource CheckBox {
-    name "voip_echo_checkbox"
-    rect 200 270 20 20
+    name "agc_checkbox"
+    rect 130 310 20 20
+    linkcvar "cl_voipAGC"
+}
+
+// === Quality Settings ===
+resource Label {
+    name "quality_section"
+    rect 10 340 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Quality"
+}
+resource Label {
+    name "bitrate_label"
+    rect 20 365 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Bitrate:"
+}
+resource Slider {
+    name "bitrate_slider"
+    rect 130 365 200 18
+    linkcvar "voip_bitrate"
+    min 8000
+    max 64000
+}
+resource Label {
+    name "bitrate_value"
+    rect 340 365 80 18
+    fgcolor 0.7 0.7 0.7 1.0
+    linkcvar "voip_bitrate"
+}
+
+// === Testing ===
+resource Label {
+    name "test_section"
+    rect 10 395 460 18
+    fgcolor 1.0 0.8 0.2 1.0
+    title "Testing"
+}
+resource Label {
+    name "echo_label"
+    rect 20 420 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Local Echo:"
+}
+resource CheckBox {
+    name "echo_checkbox"
+    rect 130 420 20 20
     linkcvar "cl_voipEcho"
 }
-
 resource Label {
-    name "voip_netloop_label"
-    rect 10 295 180 20
-    fgcolor 1 1 1 1
-    title "Network Loopback:"
+    name "loopback_label"
+    rect 180 420 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "Net Loopback:"
 }
 resource CheckBox {
-    name "voip_netloop_checkbox"
-    rect 200 295 20 20
+    name "loopback_checkbox"
+    rect 290 420 20 20
     linkcvar "cl_voipLoopback"
 }
 
+// === Main Controls ===
 resource Label {
-    name "voip_target_label"
-    rect 10 345 180 20
-    fgcolor 1 1 1 1
-    title "Send Target:"
+    name "voip_enable_label"
+    rect 20 455 100 18
+    fgcolor 0.8 0.8 0.8 1.0
+    title "VoIP Enabled:"
 }
-resource Label {
-    name "voip_target_value"
-    rect 200 345 100 20
-    fgcolor 0.7 0.9 1.0 1
-    linkcvar "cl_voipSendTarget"
-}
-resource Button {
-    name "voip_target_cycle"
-    rect 310 345 80 20
-    title "Cycle"
-    stuffcommand "vstr next_target"
-}
-
-resource Label {
-    name "voip_muteall_label"
-    rect 10 295 180 20
-    fgcolor 1 1 1 1
-    title "Mute All Incoming:"
-}
-resource Button {
-    name "voip_muteall_button"
-    rect 200 295 150 24
-    title "Toggle Mute All"
-    stuffcommand "cl_voipMuteAll"
+resource CheckBox {
+    name "voip_enable_checkbox"
+    rect 130 455 20 20
+    linkcvar "cl_voip"
 }
 
 resource Button {
     name "close_button"
-    rect 190 340 100 30
+    rect 190 485 100 28
+    fgcolor 1.0 1.0 1.0 1.0
+    bgcolor 0.3 0.3 0.4 1.0
     title "Close"
     stuffcommand "popmenu"
 }

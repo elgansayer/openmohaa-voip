@@ -1,44 +1,55 @@
-menu "voipmeter" 64 220 NONE 1
+menu "voipmeter" 64 280 NONE 1
 bgcolor 0 0 0 0
 fgcolor 1 1 1 1
 align left bottom
 
-    resource
-    Label
-    {
+// Meter Background
+resource Label {
     name "audiometer_bg"
-    rect 16 10 16 64
-    fgcolor 1.00 1.00 1.00 1.00
-    bgcolor 0.00 0.00 0.00 0.00
-    borderstyle "NONE"
+    rect 8 10 20 80
+    fgcolor 0.3 0.3 0.3 0.8
+    bgcolor 0.1 0.1 0.1 0.6
+    borderstyle "3D_BORDER"
     shader textures/hud/healthback
-    }
+}
 
-    resource
-    Label
-    {
+// Meter Fill (linked to cl_voipPower cvar)
+resource Label {
     name "audiometer"
-    rect 16 10 16 64
-    fgcolor 1.00 1.00 1.00 1.00
-    bgcolor 0.00 0.00 0.00 0.00
+    rect 10 12 16 76
+    fgcolor 1.0 1.0 1.0 1.0
+    bgcolor 0.0 0.0 0.0 0.0
     borderstyle "NONE"
     linkcvar "cl_voipPower"
     statbar vertical 0 1
     statbar_shader textures/hud/healthmeter
     statbar_shader_flash textures/hud/healthmeterflash
-    }
+}
 
-    resource
-    Label
-    {
+// Mic Icon/Label
+resource Label {
     name "mic_label"
     title "MIC"
-    rect 8 75 32 10
-    fgcolor 0.70 0.60 0.05 1.00
-    bgcolor 0.00 0.00 0.00 0.00
+    rect 4 95 28 12
+    fgcolor 0.8 0.7 0.1 1.0
+    bgcolor 0.0 0.0 0.0 0.0
     borderstyle "NONE"
     textalign center
     font facfont-20
-    }
+}
+
+// Speaking Indicator (shows when transmitting)
+resource Label {
+    name "tx_indicator"
+    title "TX"
+    rect 4 110 28 12
+    fgcolor 1.0 0.2 0.2 1.0
+    bgcolor 0.0 0.0 0.0 0.0
+    borderstyle "NONE"
+    textalign center
+    font facfont-20
+    linkcvar "cl_voipSend"
+    showwhenactive 1
+}
 
 end.
