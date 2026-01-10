@@ -9,7 +9,7 @@ struct OpusEncoder;
 
 // VoIP Constants
 #define VOIP_SAMPLE_RATE 48000
-#define VOIP_FRAME_SIZE 960  // 20ms at 48kHz
+#define VOIP_FRAME_SIZE 2880  // 60ms at 48kHz
 #define VOIP_BITRATE 32000
 #define VOIP_MAX_PACKET_SIZE 1024
 #define VOIP_MAX_DECODED_SAMPLES (VOIP_FRAME_SIZE)
