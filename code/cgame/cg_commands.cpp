@@ -3839,7 +3839,8 @@ void ClientGameCommandManager::EmitterOff(Event *ev)
 // Sound
 //===============
 void ClientGameCommandManager::PlaySound(
-    str sound_name, const vec3_t origin, int channel, float volume, float min_distance, float pitch, int argstype
+    str sound_name, const vec3_t origin, int channel, float volume, float min_distance, float pitch, int argstype,
+    float random_pitch, float random_volume
 )
 {
     int              aliaschannel;
@@ -3852,9 +3853,13 @@ void ClientGameCommandManager::PlaySound(
     float            maxDist;
     AliasListNode_t *soundAlias = NULL;
 
-    // FIXME
-    // TODO: Pitch modulation
-    // TODO: Alias enhancement
+    if (pitch >= 0.0f && random_pitch > 0.0f) {
+        pitch += random() * random_pitch;
+    }
+
+    if (volume >= 0.0f && random_volume > 0.0f) {
+        volume += random() * random_volume;
+    }
 
     // Get the real sound to play
     if (current_tiki && current_tiki->a->alias_list) {
@@ -3987,6 +3992,10 @@ void ClientGameCommandManager::Sound(Event *ev)
     str   sound_name;
     float volume       = -1.0;
     float min_distance = -1.0;
+    float pitch        = -1.0;
+    float randompitch  = 0.0;
+    float randomvolume = 0.0;
+    int   argstype     = 1; // Default to modulate so passed arguments are used
 
     if (!current_entity) {
         // don't play sound for nonexistent entities
@@ -4013,11 +4022,30 @@ void ClientGameCommandManager::Sound(Event *ev)
         min_distance = ev->GetFloat(4);
     }
 
+    if (ev->NumArgs() > 4) {
+        pitch = ev->GetFloat(5);
+    }
+
+    if (ev->NumArgs() > 5) {
+        randompitch = ev->GetFloat(6);
+    }
+
+    if (ev->NumArgs() > 6) {
+        randomvolume = ev->GetFloat(7);
+    }
+
+    if (ev->NumArgs() > 7) {
+        argstype = ev->GetInteger(8);
+    }
+
     // play the sound
     if (current_entity) {
-        PlaySound(sound_name, current_entity->origin, channel, volume, min_distance);
+        PlaySound(
+            sound_name, current_entity->origin, channel, volume, min_distance, pitch, argstype, randompitch,
+            randomvolume
+        );
     } else {
-        PlaySound(sound_name, NULL, channel, volume, min_distance);
+        PlaySound(sound_name, NULL, channel, volume, min_distance, pitch, argstype, randompitch, randomvolume);
     }
 }
 

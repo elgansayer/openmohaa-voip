@@ -940,7 +940,9 @@ public:
         float        volume       = -1,
         float        min_distance = -1,
         float        pitch        = -1,
-        int          argstype     = 0
+        int          argstype     = 0,
+        float        random_pitch = 0.0f,
+        float        random_volume = 0.0f
     );
 
     spawnthing_t *InitializeSpawnthing(spawnthing_t *ep);
