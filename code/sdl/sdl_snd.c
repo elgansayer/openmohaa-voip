@@ -449,7 +449,8 @@ void SNDDMA_Capture(int samples, byte *data)
 	{
 		SDL_DequeueAudio(sdlCaptureDevice, data, samples * 2);
         
-        // Debug Log (Optional)
+        // Debug Log (Disabled - was for diagnostics)
+        /*
         static int totalCaptured = 0;
         static int lastLogTime = 0;
         int now = Sys_Milliseconds();
@@ -459,6 +460,7 @@ void SNDDMA_Capture(int samples, byte *data)
             totalCaptured = 0;
             lastLogTime = now;
         }
+        */
 	}
 	else
 #endif

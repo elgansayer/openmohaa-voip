@@ -151,6 +151,7 @@ cvar_t *cl_voipSpeakingMask = NULL;
 cvar_t *cl_voipMuteMask = NULL;
 cvar_t *cl_voipUseVAD = NULL;
 cvar_t *cl_voipVADThreshold = NULL;
+cvar_t *cl_voipCaptureMult = NULL;  // IOQuake3 parity: mic volume multiplier
 #endif
 clientStatic_t		cls;
 clientGameExport_t	*cge;
@@ -2820,12 +2821,29 @@ void CL_VoipFrame(void) {
 		return;
 	}
 
+	// IOQuake3 parity: Check network rate (must be >= 25000 for VoIP)
+	static cvar_t *cl_rate = NULL;
+	if (!cl_rate) {
+		cl_rate = Cvar_Get("rate", "25000", CVAR_ARCHIVE);
+	}
+	if (cl_voip->modified || cl_rate->modified) {
+		if ((cl_voip->integer) && (cl_rate->integer < 25000)) {
+			Com_Printf(S_COLOR_YELLOW "Your network rate is too slow for VoIP.\n");
+			Com_Printf("Set 'rate' to at least 25000 (broadband).\n");
+			Com_Printf("Until then, VoIP is disabled.\n");
+			Cvar_Set("cl_voip", "0");
+		}
+		cl_voip->modified = qfalse;
+		cl_rate->modified = qfalse;
+	}
+
 	// Don't capture/process VoIP until we're actually in-game
 	if (clc.state != CA_ACTIVE) {
 		clc.voipPower = 0;
 		Cvar_Set("s_voipLevel", "0");
 		return;
 	}
+
 
     // Update Speaking Mask for HUD
     int mask = 0;
@@ -2886,6 +2904,9 @@ void CL_VoipFrame(void) {
     }
     if (!s_volumeVoice) {
         s_volumeVoice = Cvar_Get("s_volumeVoice", "1.0", CVAR_ARCHIVE);
+    }
+    if (!cl_voipCaptureMult) {
+        cl_voipCaptureMult = Cvar_Get("cl_voipCaptureMult", "2.0", CVAR_ARCHIVE); // IOQuake3 parity
     }
     
     static int vadHangoverTime = 0;

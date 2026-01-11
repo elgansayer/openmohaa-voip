@@ -1047,7 +1047,8 @@ void CL_RunVoipJitterBuffer( void ) {
             if (numSamples > 0) {
                 CL_PlayVoip(i, numSamples, (const byte *)decoded, flags);
                 
-                // DIAGNOSTIC: Track playback rate
+                // DIAGNOSTIC: Track playback rate (Disabled - was for debugging)
+                /*
                 static int totalSamplesPlayed = 0;
                 static int lastDiagTime = 0;
                 int diagNow = Sys_Milliseconds();
@@ -1057,6 +1058,7 @@ void CL_RunVoipJitterBuffer( void ) {
                     totalSamplesPlayed = 0;
                     lastDiagTime = diagNow;
                 }
+                */
             }
 
             pos += frameLen;
