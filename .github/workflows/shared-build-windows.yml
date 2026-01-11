@@ -264,7 +264,7 @@ jobs:
         New-Item -ItemType Directory '${{github.workspace}}/package/main' -Force
         # Using 7z if available or Compress-Archive
         if (Get-Command 7z -ErrorAction SilentlyContinue) {
-          7z a -tzip "${{github.workspace}}/package/main/openmohaa.pk3" . -xr!*.pk3 -xr!*.DS_Store
+          7z a -tzip "${{github.workspace}}/package/main/openmohaa.pk3" . '-xr!*.pk3' '-xr!*.DS_Store'
         } else {
           Compress-Archive -Path ./* -DestinationPath "${{github.workspace}}/package/main/openmohaa.zip" -Force
           Move-Item -Path "${{github.workspace}}/package/main/openmohaa.zip" -Destination "${{github.workspace}}/package/main/openmohaa.pk3" -Force
