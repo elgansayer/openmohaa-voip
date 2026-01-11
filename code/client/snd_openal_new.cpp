@@ -38,6 +38,115 @@ typedef struct {
 static int   s_iNextLoopingWarning = 0;
 static int   s_iReverbType         = 0;
 static float s_fReverbLevel        = 0;
+
+// EFX
+#ifndef AL_EXT_efx
+#define AL_EXT_efx
+typedef void (AL_APIENTRY *LPALGENEFFECTS)(ALsizei n, ALuint *effects);
+typedef void (AL_APIENTRY *LPALDELETEEFFECTS)(ALsizei n, const ALuint *effects);
+typedef ALboolean (AL_APIENTRY *LPALISEFFECT)(ALuint effect);
+typedef void (AL_APIENTRY *LPALEFFECTI)(ALuint effect, ALenum param, ALint iValue);
+typedef void (AL_APIENTRY *LPALEFFECTIV)(ALuint effect, ALenum param, const ALint *piValues);
+typedef void (AL_APIENTRY *LPALEFFECTF)(ALuint effect, ALenum param, ALfloat flValue);
+typedef void (AL_APIENTRY *LPALEFFECTFV)(ALuint effect, ALenum param, const ALfloat *pflValues);
+typedef void (AL_APIENTRY *LPALGENAUXILIARYEFFECTSLOTS)(ALsizei n, ALuint *effectslots);
+typedef void (AL_APIENTRY *LPALDELETEAUXILIARYEFFECTSLOTS)(ALsizei n, const ALuint *effectslots);
+typedef ALboolean (AL_APIENTRY *LPALISAUXILIARYEFFECTSLOT)(ALuint effectslot);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTI)(ALuint effectslot, ALenum param, ALint iValue);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTIV)(ALuint effectslot, ALenum param, const ALint *piValues);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTF)(ALuint effectslot, ALenum param, ALfloat flValue);
+typedef void (AL_APIENTRY *LPALAUXILIARYEFFECTSLOTFV)(ALuint effectslot, ALenum param, const ALfloat *pflValues);
+#endif
+
+static LPALGENEFFECTS qalGenEffects;
+static LPALDELETEEFFECTS qalDeleteEffects;
+static LPALISEFFECT qalIsEffect;
+static LPALEFFECTI qalEffecti;
+static LPALEFFECTIV qalEffectiv;
+static LPALEFFECTF qalEffectf;
+static LPALEFFECTFV qalEffectfv;
+static LPALGENAUXILIARYEFFECTSLOTS qalGenAuxiliaryEffectSlots;
+static LPALDELETEAUXILIARYEFFECTSLOTS qalDeleteAuxiliaryEffectSlots;
+static LPALISAUXILIARYEFFECTSLOT qalIsAuxiliaryEffectSlot;
+static LPALAUXILIARYEFFECTSLOTI qalAuxiliaryEffectSloti;
+static LPALAUXILIARYEFFECTSLOTIV qalAuxiliaryEffectSlotiv;
+static LPALAUXILIARYEFFECTSLOTF qalAuxiliaryEffectSlotf;
+static LPALAUXILIARYEFFECTSLOTFV qalAuxiliaryEffectSlotfv;
+
+static ALuint s_uiEffect = 0;
+static ALuint s_uiEffectSlot = 0;
+
+#ifndef AL_AUXILIARY_SEND_FILTER
+#define AL_AUXILIARY_SEND_FILTER 0x20006
+#endif
+
+#ifndef AL_EFFECTSLOT_EFFECT
+#define AL_EFFECTSLOT_EFFECT 0x0001
+#endif
+
+#ifndef AL_EFFECT_TYPE
+#define AL_EFFECT_TYPE 0x8001
+#endif
+
+#ifndef AL_EFFECT_REVERB
+#define AL_EFFECT_REVERB 0x0001
+#endif
+
+#ifndef AL_EFFECTSLOT_GAIN
+#define AL_EFFECTSLOT_GAIN 0x0002
+#endif
+
+#ifndef AL_REVERB_DENSITY
+#define AL_REVERB_DENSITY 0x0001
+#endif
+
+#ifndef AL_REVERB_DIFFUSION
+#define AL_REVERB_DIFFUSION 0x0002
+#endif
+
+#ifndef AL_REVERB_GAIN
+#define AL_REVERB_GAIN 0x0003
+#endif
+
+#ifndef AL_REVERB_GAINHF
+#define AL_REVERB_GAINHF 0x0004
+#endif
+
+#ifndef AL_REVERB_DECAY_TIME
+#define AL_REVERB_DECAY_TIME 0x0005
+#endif
+
+#ifndef AL_REVERB_DECAY_HFRATIO
+#define AL_REVERB_DECAY_HFRATIO 0x0006
+#endif
+
+#ifndef AL_REVERB_REFLECTIONS_GAIN
+#define AL_REVERB_REFLECTIONS_GAIN 0x0007
+#endif
+
+#ifndef AL_REVERB_REFLECTIONS_DELAY
+#define AL_REVERB_REFLECTIONS_DELAY 0x0008
+#endif
+
+#ifndef AL_REVERB_LATE_REVERB_GAIN
+#define AL_REVERB_LATE_REVERB_GAIN 0x0009
+#endif
+
+#ifndef AL_REVERB_LATE_REVERB_DELAY
+#define AL_REVERB_LATE_REVERB_DELAY 0x000A
+#endif
+
+#ifndef AL_REVERB_AIR_ABSORPTION_GAINHF
+#define AL_REVERB_AIR_ABSORPTION_GAINHF 0x000B
+#endif
+
+#ifndef AL_REVERB_ROOM_ROLLOFF_FACTOR
+#define AL_REVERB_ROOM_ROLLOFF_FACTOR 0x000C
+#endif
+
+#ifndef AL_REVERB_DECAY_HFLIMIT
+#define AL_REVERB_DECAY_HFLIMIT 0x000D
+#endif
 static bool  s_bReverbChanged      = false;
 static bool  s_bFading             = false;
 static float s_fFadeVolume         = 1.f;
@@ -248,6 +357,16 @@ static void S_OPENAL_NukeContext()
 
     if (al_context_id) {
         Com_Printf("OpenAL: Destroying context...\n");
+
+        if (s_uiEffectSlot) {
+            qalDeleteAuxiliaryEffectSlots(1, &s_uiEffectSlot);
+            s_uiEffectSlot = 0;
+        }
+
+        if (s_uiEffect) {
+            qalDeleteEffects(1, &s_uiEffect);
+            s_uiEffect = 0;
+        }
 
         qalcSuspendContext(al_context_id);
         qalcMakeContextCurrent(NULL);
@@ -488,6 +607,20 @@ static bool S_OPENAL_InitExtensions()
                             "alGetStringiSOFT", (void **)&qalGetStringiSOFT,
                             false, },
 #endif
+        { "alGenEffects", (void **)&qalGenEffects, false },
+        { "alDeleteEffects", (void **)&qalDeleteEffects, false },
+        { "alIsEffect", (void **)&qalIsEffect, false },
+        { "alEffecti", (void **)&qalEffecti, false },
+        { "alEffectiv", (void **)&qalEffectiv, false },
+        { "alEffectf", (void **)&qalEffectf, false },
+        { "alEffectfv", (void **)&qalEffectfv, false },
+        { "alGenAuxiliaryEffectSlots", (void **)&qalGenAuxiliaryEffectSlots, false },
+        { "alDeleteAuxiliaryEffectSlots", (void **)&qalDeleteAuxiliaryEffectSlots, false },
+        { "alIsAuxiliaryEffectSlot", (void **)&qalIsAuxiliaryEffectSlot, false },
+        { "alAuxiliaryEffectSloti", (void **)&qalAuxiliaryEffectSloti, false },
+        { "alAuxiliaryEffectSlotiv", (void **)&qalAuxiliaryEffectSlotiv, false },
+        { "alAuxiliaryEffectSlotf", (void **)&qalAuxiliaryEffectSlotf, false },
+        { "alAuxiliaryEffectSlotfv", (void **)&qalAuxiliaryEffectSlotfv, false },
         extensions_table_t {NULL, NULL, false}
     };
 
@@ -620,10 +753,15 @@ qboolean S_OPENAL_Init()
         return false;
     }
 
-    al_use_reverb = false;
-    if (s_reverb->integer) {
-        STUB_DESC("reenable reverb support later.");
+    al_use_reverb = qfalse;
+    if (qalcIsExtensionPresent(al_device, "ALC_EXT_EFX")) {
+        // Check if function pointers were loaded
+        if (qalGenEffects && qalGenAuxiliaryEffectSlots) {
+             al_use_reverb = qtrue;
+        }
+    }
 
+    if (s_reverb->integer) {
         if (al_use_reverb) {
             S_OPENAL_SetReverb(s_iReverbType, s_fReverbLevel);
         } else {
@@ -2467,10 +2605,17 @@ S_OPENAL_reverb
 */
 static void S_OPENAL_reverb(int iChannel, int iReverbType, float fReverbLevel)
 {
-    // FIXME: Connect source to effect slot
-    //  see https://github.com/kcat/openal-soft/blob/master/examples/alreverb.c
+    if (!al_use_reverb) {
+        return;
+    }
 
-    // No reverb currently.
+    if (!openal.channel[iChannel]) {
+        return;
+    }
+
+    // Connect source to effect slot
+    qalSource3i(openal.channel[iChannel]->source, AL_AUXILIARY_SEND_FILTER, s_uiEffectSlot, 0, AL_FILTER_NULL);
+    alDieIfError();
 }
 
 /*
@@ -2484,11 +2629,36 @@ void S_OPENAL_SetReverb(int iType, float fLevel)
     s_iReverbType  = iType;
     if (al_use_reverb) {
         s_bReverbChanged = true;
+    } else {
+        return;
     }
 
-    // FIXME: generate effect and auxiliary effect slot
-    //  or destroy them
-    //  see https://github.com/kcat/openal-soft/blob/master/examples/alreverb.c
+    if (!s_uiEffectSlot) {
+        qalGenAuxiliaryEffectSlots(1, &s_uiEffectSlot);
+        alDieIfError();
+    }
+
+    if (!s_uiEffect) {
+        qalGenEffects(1, &s_uiEffect);
+        alDieIfError();
+    }
+
+    if (!s_uiEffectSlot || !s_uiEffect) {
+        al_use_reverb = false;
+        return;
+    }
+
+    // Configure the effect
+    qalEffecti(s_uiEffect, AL_EFFECT_TYPE, AL_EFFECT_REVERB);
+    alDieIfError();
+
+    // Attach effect to slot
+    qalAuxiliaryEffectSloti(s_uiEffectSlot, AL_EFFECTSLOT_EFFECT, s_uiEffect);
+    alDieIfError();
+
+    // Update gain
+    qalAuxiliaryEffectSlotf(s_uiEffectSlot, AL_EFFECTSLOT_GAIN, fLevel);
+    alDieIfError();
 }
 
 /*
