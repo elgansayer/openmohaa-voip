@@ -815,14 +815,11 @@ static qboolean CL_ShouldIgnoreVoipSender(int sender)
 	}
 	
 	if ((sender == clc.clientNum) && (!clc.demoplaying)) {
-		/*
 		if (!cl_voipLoopback || !cl_voipLoopback->integer) {
 			return qtrue;
 		} else {
 			return qfalse;
 		}
-		*/
-		return qfalse; // FORCE LOOPBACK FOR DEBUGGING
 	}
 	
 	if (clc.voipMuteAll) {
